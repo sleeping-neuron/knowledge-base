@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block title %}AI 写作{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-8 py-8" x-data="aiPage()">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <h1 class="text-2xl font-bold theme-text flex items-center gap-2">
+                <svg class="w-6 h-6 text-[var(--accent)]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/>
+                </svg>
+                <span data-i18n="aiTitle">AI 写作助手</span>
+            </h1>
+            <p class="text-sm theme-text-secondary mt-1" x-text="lang === 'zh' ? '输入话题，AI 自动生成知识笔记' : 'Enter a topic, AI generates a knowledge note'"></p>
+        </div>
+        <!-- 设置按钮 -->
+        <button @click="showSettings = !showSettings"
+                class="toolbar-btn" title="API Key 设置">
+            <svg class="w-[1.1rem] h-[1.1rem]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z"/>
+                <circle cx="12" cy="12" r="3"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- API Key 设置面板 -->
+    <div x-show="showSettings" x-collapse class="mb-6">
+        <div class="ai-card rounded-2xl p-6 mb-4">
+            <h3 class="text-sm font-semibold theme-text mb-4" data-i18n="aiConfig">设置 API Key</h3>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs theme-label mb-1.5" data-i18n="apiKeyLabel">DeepSeek API Key</label>
+                    <input x-model="apiKey" type="password"
+                           class="w-full px-3 py-2 rounded-xl text-sm theme-input font-mono"
+                           :placeholder="lang === 'zh' ? 'sk-...' : 'sk-...'">
+                </div>
+                <div>
+                    <label class="block text-xs theme-label mb-1.5" data-i18n="apiModelLabel">模型</label>
+                    <select x-model="model"
+                            class="w-full rounded-xl px-3 py-2 text-sm theme-input cursor-pointer appearance-none
+                                   bg-[url('data:image/svg+xml;charset=utf-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 fill=%22%2394a3b8%22><path d=%22M4 6l4 4 4-4%22/></svg>')]
+                                   bg-[length:16px] bg-[right_8px_center] bg-no-repeat pr-8">
+                        <option value="deepseek-v4-flash">DeepSeek V4 Flash（快速）</option>
+                        <option value="deepseek-v4-pro">DeepSeek V4 Pro（旗舰）</option>
+                    </select>
+                </div>
+                <div class="flex items-center justify-between pt-1">
+                    <span class="text-[11px] theme-muted" data-i18n="apiKeyHint">API Key 仅保存在本地 config.json 中</span>
+                    <button @click="saveApiKey()"
+                            class="px-4 py-1.5 rounded-xl text-sm font-medium text-white
+                                   bg-indigo-500 hover:bg-indigo-400 transition-all duration-200
+                                   shadow-lg shadow-indigo-500/20">
+                        <span data-i18n="apiSave">保存配置</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 话题输入区 -->
+    <div class="mb-6">
+        <div class="ai-card rounded-2xl p-1.5 flex items-center gap-2">
+            <textarea x-model="topic" rows="2"
+                      class="flex-1 resize-none bg-transparent border-none outline-none theme-text placeholder:text-[var(--muted)] text-sm p-3"
+                      :placeholder="lang === 'zh' ? '输入你想了解的话题，例如：Python 装饰器原理、Docker 容器化最佳实践...' : 'Enter a topic, e.g.: Python decorators explained, Docker best practices...'"
+                      @keydown.meta.enter="generate()"
+                      @keydown.ctrl.enter="generate()"></textarea>
+            <button @click="generate()" :disabled="generating"
+                    class="shrink-0 self-end mb-1.5 mr-1.5 px-5 py-2 rounded-xl text-sm font-medium text-white
+                           bg-gradient-to-r from-indigo-500 to-violet-500
+                           hover:from-indigo-400 hover:to-violet-400
+                           shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35
+                           transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed
+                           inline-flex items-center gap-1.5">
+                <svg x-show="!generating" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+                </svg>
+                <svg x-show="generating" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                </svg>
+                <span x-text="generating ? t('aiGenerating') : t('aiGenerate')"></span>
+            </button>
+        </div>
+        <p class="text-[11px] theme-muted mt-2 text-right" x-text="lang === 'zh' ? 'Ctrl/Cmd + Enter 快捷发送' : 'Ctrl/Cmd + Enter to send'"></p>
+    </div>
+
+    <!-- 错误提示 -->
+    <div x-show="error" class="mb-4 p-4 rounded-xl bg-red-500/8 border border-red-500/15 text-sm text-red-400"
+         x-text="error" @click="error = ''"></div>
+
+    <!-- AI 生成结果 -->
+    <div x-show="result">
+        <!-- 元信息预览 -->
+        <div class="flex flex-wrap items-center gap-3 mb-4 text-sm">
+            <span class="theme-label" data-i18n="categoryLabel">分类</span>
+            <span class="px-2.5 py-0.5 rounded-md bg-[var(--accent)]/8 text-[var(--accent)] border border-[var(--accent)]/15 text-xs"
+                  x-text="result.category || (lang === 'zh' ? '未分类' : 'Uncategorized')"></span>
+            <span class="theme-label ml-2" data-i18n="tagLabel">标签</span>
+            <template x-for="t in result.tags" :key="t">
+                <span class="px-2.5 py-0.5 rounded-full text-xs bg-[var(--accent)]/8 text-[var(--accent)] border border-[var(--accent)]/15"
+                      x-text="t"></span>
+            </template>
+        </div>
+
+        <!-- 标题 -->
+        <h2 class="text-xl font-bold theme-text mb-4" x-text="result.title"></h2>
+
+        <!-- 内容预览 -->
+        <div class="ai-card rounded-2xl p-8 mb-4">
+            <div class="markdown-body" x-html="result.rendered"></div>
+        </div>
+
+        <!-- 保存按钮 -->
+        <div class="flex justify-end gap-3">
+            <button @click="result = null; error = ''"
+                    class="px-4 py-2 rounded-xl text-sm theme-btn-ghost" data-i18n="cancel">取消</button>
+            <button @click="saveToKnowledge()" :disabled="saving"
+                    class="px-5 py-2 rounded-xl text-sm font-medium text-white
+                           bg-gradient-to-r from-indigo-500 to-violet-500
+                           hover:from-indigo-400 hover:to-violet-400
+                           shadow-lg shadow-indigo-500/20
+                           transition-all duration-300 disabled:opacity-50
+                           inline-flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span data-i18n="aiSaveAsDraft">保存到知识库</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function aiPage() {
+    return {
+        topic: '',
+        generating: false,
+        saving: false,
+        error: '',
+        result: null,
+        showSettings: false,
+        apiKey: '',
+        model: 'deepseek-v4-flash',
+        lang: 'zh',
+
+        init() {
+            this.lang = localStorage.getItem('kb-lang') || 'zh';
+            this.loadConfig();
+        },
+
+        async loadConfig() {
+            try {
+                const resp = await fetch('/api/config');
+                const cfg = await resp.json();
+                this.model = cfg.model || 'deepseek-v4-flash';
+                this.lang = cfg.language || 'zh';
+            } catch(e) {}
+        },
+
+        async saveApiKey() {
+            await fetch('/api/config/apikey', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({api_key: this.apiKey, model: this.model}),
+            });
+            window.__kb.showToast(this.lang === 'zh' ? '配置已保存' : 'Saved', 'info');
+            this.showSettings = false;
+        },
+
+        async generate() {
+            if (!this.topic.trim()) {
+                window.__kb.showToast(t(this.lang === 'zh' ? '请输入话题' : 'enterTopic'), 'error');
+                return;
+            }
+            this.generating = true;
+            this.error = '';
+            this.result = null;
+            try {
+                const resp = await fetch('/api/ai/generate', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({topic: this.topic, lang: this.lang}),
+                });
+                const data = await resp.json();
+                if (data.error) {
+                    this.error = data.error;
+                } else {
+                    // Render markdown
+                    const pr = await fetch('/api/preview', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({content: data.content}),
+                    });
+                    const prData = await pr.json();
+                    this.result = { ...data, rendered: prData.html };
+                }
+            } catch {
+                this.error = this.lang === 'zh' ? '网络请求失败' : 'Network error';
+            } finally {
+                this.generating = false;
+            }
+        },
+
+        async saveToKnowledge() {
+            if (!this.result) return;
+            this.saving = true;
+            try {
+                // 创建或匹配分类
+                let categoryId = null;
+                if (this.result.category) {
+                    const catsResp = await fetch('/api/categories');
+                    const cats = await catsResp.json();
+                    let cat = cats.find(c => c.name.toLowerCase() === this.result.category.toLowerCase());
+                    if (!cat) {
+                        const newResp = await fetch('/api/category', {
+                            method: 'POST', headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({name: this.result.category}),
+                        });
+                        cat = await newResp.json();
+                    }
+                    categoryId = cat.id;
+                }
+
+                // 创建或匹配标签
+                const tagIds = [];
+                if (this.result.tags && this.result.tags.length > 0) {
+                    const tagsResp = await fetch('/api/tags');
+                    const existingTags = await tagsResp.json();
+                    for (const tagName of this.result.tags) {
+                        let tag = existingTags.find(t => t.name.toLowerCase() === tagName.toLowerCase());
+                        if (!tag) {
+                            const colors = ['#f87171','#fb923c','#fbbf24','#34d399','#38bdf8','#818cf8','#c084fc','#f472b6'];
+                            const color = colors[Math.floor(Math.random() * colors.length)];
+                            const newResp = await fetch('/api/tag', {
+                                method: 'POST', headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({name: tagName, color}),
+                            });
+                            tag = await newResp.json();
+                        }
+                        tagIds.push(tag.id);
+                    }
+                }
+
+                // 创建文章
+                const resp = await fetch('/api/article', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        title: this.result.title,
+                        content: this.result.content,
+                        category_id: categoryId,
+                        tag_ids: tagIds,
+                    }),
+                });
+                const article = await resp.json();
+                window.location.href = '/article/' + article.id;
+            } catch {
+                window.__kb.showToast(this.lang === 'zh' ? '保存失败' : 'Save failed', 'error');
+            } finally {
+                this.saving = false;
+            }
+        },
+
+        t(key) {
+            const lang = localStorage.getItem('kb-lang') || 'zh';
+            const I18N = {
+                zh: { enterTopic: '请输入话题', aiGenerating: 'AI 正在生成...', aiGenerate: '生成笔记' },
+                en: { enterTopic: 'Please enter a topic', aiGenerating: 'AI is writing...', aiGenerate: 'Generate Note' },
+            };
+            return (I18N[lang] || I18N.zh)[key] || key;
+        },
+    };
+}
+</script>
+{% endblock %}

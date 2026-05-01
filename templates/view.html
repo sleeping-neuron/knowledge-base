@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-8 py-8" x-data="viewer()">
+    <div class="flex items-start justify-between mb-8">
+        <a href="/" class="text-sm theme-muted hover:theme-text transition-colors inline-flex items-center gap-1">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+            <span data-i18n="back">返回</span>
+        </a>
+        <div class="flex gap-2">
+            <a href="/article/{{ article.id }}/edit"
+               class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-xl border theme-btn-ghost hover:bg-[var(--bg-input)] transition-all duration-200">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/>
+                </svg>
+                <span data-i18n="edit">编辑</span>
+            </a>
+            <button @click="onDelete()"
+                    class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-xl border border-red-500/15 text-red-400/70 hover:text-red-400 hover:bg-red-500/6 hover:border-red-500/25 transition-all duration-200">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+                </svg>
+                <span data-i18n="delete">删除</span>
+            </button>
+        </div>
+    </div>
+
+    <article>
+        <h1 class="text-3xl font-bold theme-text mb-5 tracking-tight">{{ article.title }}</h1>
+
+        <div class="flex items-center gap-3 mb-10 text-sm flex-wrap">
+            {% if article.category %}
+            <span class="px-2.5 py-0.5 rounded-md bg-[var(--bg-input)] theme-text-secondary border">
+                {{ article.category.name }}
+            </span>
+            {% endif %}
+            {% for tag in article.tags %}
+            <span class="px-2.5 py-0.5 rounded-full text-xs"
+                  style="background-color: {{ tag.color }}12; color: {{ tag.color }}; border: 1px solid {{ tag.color }}20;">
+                {{ tag.name }}
+            </span>
+            {% endfor %}
+            <span class="theme-muted">·</span>
+            <span class="theme-muted"><span data-i18n="created">创建于</span> {{ article.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            <span class="theme-muted"><span data-i18n="updated">更新于</span> {{ article.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+        </div>
+
+        <div class="rounded-2xl border p-8 md:p-10 theme-card">
+            {% if article.rendered_content %}
+            {{ article.rendered_content | safe }}
+            {% else %}
+            <p class="theme-muted italic" data-i18n="emptyContent">（空内容）</p>
+            {% endif %}
+        </div>
+    </article>
+</div>
+
+<script>
+function viewer() {
+    return {
+        async onDelete() {
+            const lang = localStorage.getItem('kb-lang') || 'zh';
+            const msg = lang === 'zh'
+                ? '确认删除这篇笔记？此操作不可撤销。'
+                : 'Delete this note? This action cannot be undone.';
+            const ok = await window.__kb.confirm(msg, 'danger');
+            if (!ok) return;
+            await fetch('/api/article/{{ article.id }}', {method: 'DELETE'});
+            window.location.href = '/';
+        },
+    };
+}
+</script>
+{% endblock %}

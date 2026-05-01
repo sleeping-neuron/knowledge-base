@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}{% if query %}{{ query }} - 搜索{% elif current_category_name %}{{ current_category_name }}{% else %}知识库{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-8 py-8">
+    <div class="mb-8">
+        {% if query %}
+        <h1 class="text-2xl font-bold theme-text">
+            <span data-i18n="searchTitle">搜索</span> "<span class="text-[var(--accent)]">{{ query }}</span>"
+        </h1>
+        <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="results">条结果</span></p>
+        {% elif current_category_name %}
+        <h1 class="text-2xl font-bold theme-text">{{ current_category_name }}</h1>
+        <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="notes">篇笔记</span></p>
+        {% elif current_tag_name %}
+        <h1 class="text-2xl font-bold theme-text">
+            <span data-i18n="tagLabel">标签</span> <span class="text-[var(--accent)]">#{{ current_tag_name }}</span>
+        </h1>
+        <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="notes">篇笔记</span></p>
+        {% else %}
+        <h1 class="text-2xl font-bold theme-text" data-i18n="allNotesTitle">所有笔记</h1>
+        <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="notes">篇笔记</span></p>
+        {% endif %}
+    </div>
+
+    {% if articles %}
+    <div class="space-y-3">
+        {% for article in articles %}
+        <a href="/article/{{ article.id }}" class="group block rounded-2xl border p-5 relative overflow-hidden theme-card">
+            <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-500/0 to-cyan-500/0
+                        group-hover:from-indigo-500/[0.04] group-hover:via-violet-500/[0.02] group-hover:to-cyan-500/[0.02]
+                        transition-all duration-500 rounded-2xl"></div>
+            <div class="absolute left-0 top-4 bottom-4 w-[3px] rounded-r-full bg-gradient-to-b from-indigo-400 to-cyan-400
+                        opacity-0 group-hover:opacity-100 transition-opacity duration-300 scale-y-50 group-hover:scale-y-100"></div>
+            <div class="relative flex items-start justify-between gap-4">
+                <div class="flex-1 min-w-0">
+                    <h2 class="text-lg font-semibold theme-text group-hover:text-[var(--accent-hover)] transition-colors truncate">
+                        {{ article.title }}
+                    </h2>
+                    {% if article.snippet %}
+                    <p class="text-sm theme-text-secondary mt-1.5 line-clamp-2">{{ article.snippet }}</p>
+                    {% endif %}
+                    <div class="flex items-center gap-2 mt-3 flex-wrap">
+                        {% if article.category_name %}
+                        <span class="text-xs px-2.5 py-0.5 rounded-md bg-[var(--bg-input)] theme-text-secondary border">{{ article.category_name }}</span>
+                        {% endif %}
+                        {% for tag in article.tags %}
+                        <span class="text-xs px-2.5 py-0.5 rounded-full"
+                              style="background-color: {{ tag.color }}12; color: {{ tag.color }}; border: 1px solid {{ tag.color }}20;">
+                            {{ tag.name }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="text-xs theme-muted shrink-0 text-right leading-relaxed">
+                    <div>{{ article.updated_at.strftime('%Y-%m-%d') }}</div>
+                    <div>{{ article.updated_at.strftime('%H:%M') }}</div>
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="flex justify-center gap-2 mt-10">
+        {% set qs_parts = [] %}
+        {% if query %}{% set _ = qs_parts.append('q=' + query) %}{% endif %}
+        {% if current_category %}{% set _ = qs_parts.append('category=' + current_category|string) %}{% endif %}
+        {% set qs = '&' + qs_parts|join('&') if qs_parts else '' %}
+        {% if page > 1 %}
+        <a href="?page={{ page - 1 }}{{ qs }}" class="px-4 py-2 rounded-xl text-sm border theme-btn-ghost hover:bg-[var(--bg-input)] transition-all duration-200" data-i18n="prev">上一页</a>
+        {% endif %}
+        <span class="px-4 py-2 text-sm theme-muted"><span data-i18n="page">第</span> {{ page }} <span data-i18n="of">/</span> {{ total_pages }} <span>页</span></span>
+        {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}{{ qs }}" class="px-4 py-2 rounded-xl text-sm border theme-btn-ghost hover:bg-[var(--bg-input)] transition-all duration-200" data-i18n="next">下一页</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-24">
+        <div class="text-6xl mb-5 opacity-20">
+            <svg class="w-20 h-20 mx-auto" fill="none" stroke="currentColor" stroke-width="0.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+            </svg>
+        </div>
+        {% if query %}
+        <p class="theme-text-secondary text-lg"><span data-i18n="notFound">未找到与</span> "<span class="text-[var(--accent)]">{{ query }}</span>" <span data-i18n="related">相关的结果</span></p>
+        <p class="theme-muted text-sm mt-1" data-i18n="tryOther">试试其他关键词</p>
+        {% else %}
+        <p class="theme-text-secondary text-lg" data-i18n="noNotes">还没有笔记</p>
+        <a href="/new" class="inline-block mt-4 px-6 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-indigo-500 to-violet-500 text-white hover:from-indigo-400 hover:to-violet-400 transition-all duration-300 shadow-lg shadow-indigo-500/20" data-i18n="createFirst">创建第一篇 →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

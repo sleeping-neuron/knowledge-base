@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}知识库{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+    <script>
+        // 立即加载主题，避免闪白
+        (function(){
+            const t = localStorage.getItem('kb-theme') || 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        })();
+    </script>
+    <style>{{ pygments_css | safe }}</style>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="min-h-screen antialiased" x-data="app()">
+
+    <!-- 背景光晕（仅深色模式） -->
+    <div class="fixed inset-0 -z-10 pointer-events-none">
+        <div class="absolute inset-0 theme-bg"></div>
+        <div class="absolute top-0 -left-20 w-[500px] h-[500px] rounded-full blur-[130px] theme-glow-1"></div>
+        <div class="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full blur-[130px] theme-glow-2"></div>
+        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[150px] theme-glow-3"></div>
+    </div>
+
+    <!-- 顶栏 -->
+    <header class="sticky top-0 z-30 theme-header border-b">
+        <div class="flex items-center h-14 px-5 gap-3">
+            <a href="/" class="flex items-center gap-2.5 group shrink-0">
+                <svg class="w-7 h-7 text-[var(--accent)] group-hover:opacity-80 transition-opacity duration-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/>
+                </svg>
+                <span class="text-lg font-semibold tracking-tight theme-text-primary" data-i18n="appName">知识库</span>
+            </a>
+
+            <div class="flex-1"></div>
+
+            <!-- 工具栏按钮 -->
+            <div class="flex items-center gap-1">
+                <!-- AI 写作 -->
+                <a href="/ai" class="toolbar-btn group" title="AI 写作">
+                    <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/>
+                    </svg>
+                    <span class="hidden sm:inline text-xs font-medium" data-i18n="aiWrite">AI 写作</span>
+                </a>
+
+                <!-- 语言切换 -->
+                <button @click="toggleLang()" class="toolbar-btn" :title="lang === 'zh' ? 'Switch to English' : '切换到中文'">
+                    <span class="text-xs font-bold tracking-tight w-5 text-center" x-text="lang === 'zh' ? 'EN' : '中'"></span>
+                </button>
+
+                <!-- 主题切换 -->
+                <button @click="toggleTheme()" class="toolbar-btn" :title="theme === 'dark' ? '切换浅色模式' : 'Switch to dark mode'">
+                    <!-- 太阳图标 -->
+                    <svg x-show="theme === 'dark'" class="w-4.5 h-4.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2m-6-16l1.5 1.5m9 9l1.5 1.5M4 12H2m20 0h-2m-2.5-5.5L19 8m-1.5 9.5L19 16"/>
+                    </svg>
+                    <!-- 月亮图标 -->
+                    <svg x-show="theme === 'light'" class="w-4.5 h-4.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/>
+                    </svg>
+                </button>
+
+                <!-- 新建 -->
+                <a href="/new" class="rounded-xl text-sm font-medium text-white
+                          bg-gradient-to-r from-indigo-500 to-violet-500
+                          hover:from-indigo-400 hover:to-violet-400
+                          shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35
+                          transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]
+                          inline-flex items-center gap-1.5 px-4 py-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+                    </svg>
+                    <span data-i18n="newNote">新建笔记</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex gap-3 p-3 max-w-[1440px] mx-auto">
+        <!-- 侧边栏 -->
+        <aside class="sticky top-[4.25rem] h-[calc(100vh-5.5rem)] w-60 shrink-0 theme-sidebar rounded-2xl border shadow-2xl p-4 overflow-y-auto flex flex-col gap-5">
+
+            <!-- 搜索 -->
+            <form action="/" method="get" class="relative">
+                <input type="text" name="q" value="{{ query or '' }}"
+                       :placeholder="lang === 'zh' ? '搜索...' : 'Search...'"
+                       class="w-full pl-9 pr-3 py-2 rounded-xl text-sm theme-input">
+                <svg class="w-4 h-4 absolute left-3 top-2.5 text-[var(--muted)]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+                </svg>
+            </form>
+
+            <!-- 分类 -->
+            <div>
+                <h3 class="text-[10px] font-semibold uppercase tracking-[0.18em] mb-3 flex items-center justify-between theme-label">
+                    <span data-i18n="categories">分类</span>
+                    <button @click="promptCategory()" class="hover:text-[var(--accent)] text-base leading-none transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+                        </svg>
+                    </button>
+                </h3>
+                <ul class="space-y-0.5">
+                    <li>
+                        <a href="/" class="sidebar-item block px-3 py-2 rounded-lg text-sm transition-all duration-200
+                           {% if not current_category %}active{% endif %}" data-i18n="allNotes">全部笔记</a>
+                    </li>
+                    {% for cat in categories %}
+                    <li>
+                        <a href="/?category={{ cat.id }}" class="sidebar-item block px-3 py-2 rounded-lg text-sm transition-all duration-200
+                           {% if current_category == cat.id %}active{% endif %}">
+                            {{ cat.name }}
+                            <span class="text-[11px] sidebar-count ml-1.5">({{ cat.article_count }})</span>
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- 标签 -->
+            <div>
+                <h3 class="text-[10px] font-semibold uppercase tracking-[0.18em] mb-3 flex items-center justify-between theme-label">
+                    <span data-i18n="tags">标签</span>
+                    <button @click="promptTag()" class="hover:text-[var(--accent)] text-base leading-none transition-colors">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+                        </svg>
+                    </button>
+                </h3>
+                <div class="flex flex-wrap gap-1.5">
+                    {% for t in tags %}
+                    <a href="/?tag={{ t.id }}"
+                       class="px-2.5 py-1 rounded-full text-xs transition-all duration-200
+                              {% if current_tag == t.id %}ring-2 ring-offset-2 ring-offset-[var(--bg-card)] font-medium{% endif %}"
+                       style="background-color: {{ t.color }}12; color: {{ t.color }}; border: 1px solid {{ t.color }}20">
+                        {{ t.name }}
+                    </a>
+                    {% endfor %}
+                    {% if not tags %}
+                    <span class="text-xs theme-muted" data-i18n="noTags">暂无标签</span>
+                    {% endif %}
+                </div>
+            </div>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="flex-1 min-h-[calc(100vh-5.5rem)]">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <!-- ====== 确认弹窗 ====== -->
+    <div x-show="modal.show" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         x-transition.opacity.duration.200>
+        <div class="absolute inset-0 modal-overlay" @click="modal.show = false; modal.resolve(false)"></div>
+        <div class="relative theme-modal rounded-2xl p-6 min-w-[340px] max-w-sm"
+             x-show="modal.show"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95 translate-y-2"
+             x-transition:enter-end="opacity-100 scale-100 translate-y-0">
+            <p class="text-sm theme-text leading-relaxed" x-text="modal.message"></p>
+            <div class="flex justify-end gap-2 mt-5">
+                <button @click="modal.show = false; modal.resolve(false)"
+                        class="px-4 py-2 rounded-xl text-sm theme-btn-ghost" data-i18n="cancel">取消</button>
+                <button @click="modal.show = false; modal.resolve(true)"
+                        class="px-4 py-2 rounded-xl text-sm font-medium text-white transition-all duration-200"
+                        :class="modal.type === 'danger' ? 'bg-red-500/80 hover:bg-red-500 shadow-lg shadow-red-500/20' : 'bg-indigo-500 hover:bg-indigo-400 shadow-lg shadow-indigo-500/20'"
+                        x-show="modal.type === 'danger'" data-i18n="confirmDelete">确认删除</button>
+                <button @click="modal.show = false; modal.resolve(true)"
+                        class="px-4 py-2 rounded-xl text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-400 shadow-lg shadow-indigo-500/20 transition-all duration-200"
+                        x-show="modal.type === 'info'" data-i18n="confirm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== 输入弹窗 ====== -->
+    <div x-show="promptDialog.show" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         x-transition.opacity.duration.200>
+        <div class="absolute inset-0 modal-overlay" @click="promptDialog.show = false; promptDialog.resolve(null)"></div>
+        <div class="relative theme-modal rounded-2xl p-6 min-w-[340px] max-w-sm"
+             x-show="promptDialog.show"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 scale-95 translate-y-2"
+             x-transition:enter-end="opacity-100 scale-100 translate-y-0">
+            <label class="block text-sm theme-text-secondary mb-3" x-text="promptDialog.message"></label>
+            <input type="text" x-model="promptDialog.value" x-ref="promptInput"
+                   class="w-full px-3 py-2 rounded-xl text-sm theme-input"
+                   @keydown.enter="promptDialog.show = false; promptDialog.resolve(promptDialog.value)"
+                   :placeholder="lang === 'zh' ? '输入后按回车确认...' : 'Press Enter to confirm...'">
+            <div class="flex justify-end gap-2 mt-4">
+                <button @click="promptDialog.show = false; promptDialog.resolve(null)"
+                        class="px-4 py-2 rounded-xl text-sm theme-btn-ghost" data-i18n="cancel">取消</button>
+                <button @click="promptDialog.show = false; promptDialog.resolve(promptDialog.value)"
+                        class="px-5 py-2 rounded-xl text-sm font-medium text-white bg-indigo-500 hover:bg-indigo-400 shadow-lg shadow-indigo-500/20 transition-all duration-200" data-i18n="confirm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ====== Toast ====== -->
+    <div x-show="toast.show" x-cloak
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl text-sm font-medium shadow-2xl theme-modal border transition-all duration-300"
+         x-text="toast.message"
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         :class="toast.type === 'error' ? 'text-red-400' : 'text-[var(--text)]'">
+    </div>
+
+    <script>
+    // ====== i18n ======
+    const I18N = {
+        zh: {
+            appName: '知识库', newNote: '新建笔记', aiWrite: 'AI 写作',
+            categories: '分类', tags: '标签', allNotes: '全部笔记', noTags: '暂无标签',
+            search: '搜索...', searchTitle: '搜索', results: '条结果',
+            notes: '篇笔记', allNotesTitle: '所有笔记',
+            edit: '编辑', delete: '删除', save: '保存', saving: '保存中...',
+            back: '返回', cancel: '取消', confirm: '确定', confirmDelete: '确认删除',
+            createFirst: '创建第一篇 →', noNotes: '还没有笔记',
+            notFound: '未找到与', related: '相关的结果', tryOther: '试试其他关键词',
+            inputTitle: '请输入标题', saveError: '保存失败', networkError: '网络错误',
+            categoryLabel: '分类', tagLabel: '标签', uncategorized: '未分类',
+            add: '添加', addTagFirst: '暂无标签，先在侧边栏创建',
+            previewArea: '预览区域', tabIndent: 'Tab 缩进', livePreview: '右侧实时预览',
+            mdHint: '支持代码高亮 / 表格 / 图片...', mdPlaceholder: '在此编写 Markdown 内容...',
+            deleteConfirm: '确认删除这篇笔记？此操作不可撤销。',
+            created: '创建于', updated: '更新于', emptyContent: '（空内容）',
+            prev: '上一页', next: '下一页', page: '第', of: '/',
+            inputCategory: '输入分类名称', inputTag: '输入标签名称',
+            aiTitle: 'AI 写作助手', aiPlaceholder: '输入你想了解的话题...',
+            aiGenerate: '生成笔记', aiGenerating: 'AI 正在生成...',
+            aiSaveAsDraft: '保存到知识库', aiConfig: '设置 API Key',
+            apiKeyLabel: 'Anthropic API Key', apiKeyPlaceholder: 'sk-ant-...',
+            apiModelLabel: '模型', apiSave: '保存配置', apiSaved: '配置已保存',
+            apiKeyHint: 'API Key 仅保存在本地 config.json 中',
+            noApiKey: '请先在设置中配置 API Key',
+            enterTopic: '请输入话题',
+        },
+        en: {
+            appName: 'Knowledge Base', newNote: 'New Note', aiWrite: 'AI Write',
+            categories: 'Categories', tags: 'Tags', allNotes: 'All Notes', noTags: 'No tags yet',
+            search: 'Search...', searchTitle: 'Search', results: 'results',
+            notes: 'notes', allNotesTitle: 'All Notes',
+            edit: 'Edit', delete: 'Delete', save: 'Save', saving: 'Saving...',
+            back: 'Back', cancel: 'Cancel', confirm: 'OK', confirmDelete: 'Delete',
+            createFirst: 'Create first note →', noNotes: 'No notes yet',
+            notFound: 'No results for', related: '', tryOther: 'Try different keywords',
+            inputTitle: 'Please enter a title', saveError: 'Save failed', networkError: 'Network error',
+            categoryLabel: 'Category', tagLabel: 'Tags', uncategorized: 'Uncategorized',
+            add: 'Add', addTagFirst: 'No tags, create one in sidebar first',
+            previewArea: 'Preview area', tabIndent: 'Tab to indent', livePreview: 'Live preview on the right',
+            mdHint: 'Supports code highlight / tables / images...', mdPlaceholder: 'Write Markdown here...',
+            deleteConfirm: 'Delete this note? This action cannot be undone.',
+            created: 'Created', updated: 'Updated', emptyContent: '(Empty)',
+            prev: 'Prev', next: 'Next', page: 'Page', of: 'of',
+            inputCategory: 'Enter category name', inputTag: 'Enter tag name',
+            aiTitle: 'AI Writing Assistant', aiPlaceholder: 'Enter a topic to explore...',
+            aiGenerate: 'Generate Note', aiGenerating: 'AI is writing...',
+            aiSaveAsDraft: 'Save to Knowledge Base', aiConfig: 'API Key Settings',
+            apiKeyLabel: 'Anthropic API Key', apiKeyPlaceholder: 'sk-ant-...',
+            apiModelLabel: 'Model', apiSave: 'Save Config', apiSaved: 'Saved',
+            apiKeyHint: 'API Key is stored in local config.json only',
+            noApiKey: 'Please configure API Key in settings first',
+            enterTopic: 'Please enter a topic',
+        },
+    };
+
+    function t(key) {
+        const lang = document.documentElement.lang === 'en' ? 'en' : 'zh';
+        return I18N[lang][key] || key;
+    }
+
+    // 刷新所有带 data-i18n 的元素
+    function refreshI18n() {
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.getAttribute('data-i18n');
+            if (el.tagName === 'INPUT' && el.hasAttribute('placeholder')) {
+                el.placeholder = t(key);
+            } else {
+                el.textContent = t(key);
+            }
+        });
+        // 更新 input placeholder
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            el.placeholder = t(el.getAttribute('data-i18n-placeholder'));
+        });
+    }
+
+    function app() {
+        return {
+            lang: 'zh',
+            theme: 'dark',
+
+            init() {
+                window.__kb = this;  // 全局桥接，供子组件跨层级调用
+                this.theme = localStorage.getItem('kb-theme') || 'dark';
+                this.lang = localStorage.getItem('kb-lang') || 'zh';
+                this.applyTheme();
+                this.applyLang();
+                // 从服务端同步配置
+                this.syncConfig();
+            },
+
+            async syncConfig() {
+                try {
+                    const resp = await fetch('/api/config');
+                    const cfg = await resp.json();
+                    if (cfg.language && cfg.language !== this.lang) {
+                        this.lang = cfg.language;
+                        localStorage.setItem('kb-lang', this.lang);
+                        this.applyLang();
+                    }
+                    if (cfg.theme && cfg.theme !== this.theme) {
+                        this.theme = cfg.theme;
+                        localStorage.setItem('kb-theme', this.theme);
+                        this.applyTheme();
+                    }
+                } catch(e) {}
+            },
+
+            toggleLang() {
+                this.lang = this.lang === 'zh' ? 'en' : 'zh';
+                localStorage.setItem('kb-lang', this.lang);
+                this.applyLang();
+                fetch('/api/config', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({language: this.lang}),
+                }).catch(() => {});
+            },
+
+            applyLang() {
+                document.documentElement.lang = this.lang === 'zh' ? 'zh-CN' : 'en';
+                this.$nextTick(() => refreshI18n());
+            },
+
+            toggleTheme() {
+                this.theme = this.theme === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('kb-theme', this.theme);
+                this.applyTheme();
+                fetch('/api/config', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({theme: this.theme}),
+                }).catch(() => {});
+            },
+
+            applyTheme() {
+                document.documentElement.setAttribute('data-theme', this.theme);
+            },
+
+            // === 弹窗 ===
+            modal: { show: false, message: '', type: 'danger', resolve: null },
+            async confirm(message, type = 'danger') {
+                this.modal.message = message;
+                this.modal.type = type;
+                this.modal.show = true;
+                return new Promise(r => { this.modal.resolve = r; });
+            },
+
+            promptDialog: { show: false, message: '', value: '', resolve: null },
+            async askInput(message) {
+                this.promptDialog.message = message;
+                this.promptDialog.value = '';
+                this.promptDialog.show = true;
+                this.$nextTick(() => { this.$refs.promptInput.focus(); });
+                return new Promise(r => { this.promptDialog.resolve = r; });
+            },
+
+            // === Toast ===
+            toast: { show: false, message: '', type: 'info' },
+            showToast(message, type = 'info', duration = 2000) {
+                this.toast.message = message;
+                this.toast.type = type;
+                this.toast.show = true;
+                setTimeout(() => { this.toast.show = false; }, duration);
+            },
+
+            // === 快捷操作 ===
+            async promptCategory() {
+                const msg = this.lang === 'zh' ? '输入分类名称' : 'Enter category name';
+                const name = await this.askInput(msg);
+                if (!name) return;
+                await fetch('/api/category', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name}),
+                });
+                location.reload();
+            },
+            async promptTag() {
+                const msg = this.lang === 'zh' ? '输入标签名称' : 'Enter tag name';
+                const name = await this.askInput(msg);
+                if (!name) return;
+                const colors = ['#f87171','#fb923c','#fbbf24','#34d399','#38bdf8','#818cf8','#c084fc','#f472b6'];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                await fetch('/api/tag', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, color}),
+                });
+                location.reload();
+            },
+        };
+    }
+
+    document.addEventListener('DOMContentLoaded', () => refreshI18n());
+    </script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</body>
+</html>

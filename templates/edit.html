@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}{% if article %}{{ article.title }}{% else %}新建笔记{% endif %}{% endblock %}
+
+{% block content %}
+<div class="h-full flex flex-col" x-data="editor()">
+    <!-- 工具栏 -->
+    <div class="border-b px-6 py-3 flex items-center gap-4 shrink-0 theme-header" style="border-color: var(--border)">
+        <a href="/" class="theme-muted hover:theme-text text-sm transition-colors">&larr; <span data-i18n="back">返回</span></a>
+        <input type="text" x-model="title" :placeholder="t('inputTitle')"
+               class="flex-1 text-lg font-semibold border-none outline-none bg-transparent
+                      placeholder:text-[var(--muted)] theme-text">
+        <div class="flex items-center gap-2 shrink-0">
+            <button @click="save()"
+                    class="inline-flex items-center gap-1.5 px-5 py-1.5 rounded-xl text-sm font-medium text-white
+                           bg-gradient-to-r from-indigo-500 to-violet-500
+                           hover:from-indigo-400 hover:to-violet-400
+                           shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35
+                           transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    :disabled="saving">
+                <svg x-show="!saving" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                </svg>
+                <span x-text="saving ? t('saving') : t('save')"></span>
+            </button>
+            {% if article %}
+            <button @click="deleteArticle()"
+                    class="inline-flex items-center gap-1 text-red-400/70 hover:text-red-400 text-sm px-2 py-1.5 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/>
+                </svg>
+                <span data-i18n="delete">删除</span>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 元数据行 -->
+    <div class="border-b px-6 py-2.5 flex items-center gap-4 shrink-0 text-sm"
+         style="background: var(--bg-header); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-color: var(--border);">
+        <div class="flex items-center gap-2">
+            <span class="theme-label text-xs" data-i18n="categoryLabel">分类</span>
+            <select x-model="categoryId" class="rounded-lg px-3 py-1.5 text-sm outline-none cursor-pointer appearance-none theme-input
+                   bg-[url('data:image/svg+xml;charset=utf-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 fill=%22%2394a3b8%22><path d=%22M4 6l4 4 4-4%22/></svg>')]
+                   bg-[length:16px] bg-[right_8px_center] bg-no-repeat pr-8">
+                <option value="" data-i18n="uncategorized">未分类</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if article and article.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex items-center gap-2 flex-1 flex-wrap">
+            <span class="theme-label text-xs" data-i18n="tagLabel">标签</span>
+            <template x-for="(t, idx) in selectedTags" :key="t.id">
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs cursor-pointer
+                             transition-all duration-200 hover:opacity-80"
+                      :style="'background-color:' + t.color + '12; color:' + t.color + '; border: 1px solid ' + t.color + '25'"
+                      @click="selectedTags.splice(idx, 1)">
+                    <span x-text="t.name"></span>
+                    <svg class="w-3 h-3 opacity-50" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                </span>
+            </template>
+            <div>
+                <button x-ref="tagBtn" @click="openTagDropdown()"
+                        class="theme-muted hover:text-[var(--accent)] text-xs px-1 transition-colors">
+                    <svg class="w-3.5 h-3.5 inline" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+                    </svg>
+                    <span data-i18n="add">添加</span>
+                </button>
+                <!-- x-teleport + fixed 定位：彻底避开所有 overflow / backdrop-filter 层叠裁剪 -->
+                <template x-teleport="body">
+                    <div x-show="tagDropdown.open" x-cloak
+                         @click.outside="tagDropdown.open = false"
+                         class="fixed rounded-xl shadow-2xl py-1 z-[200] min-w-[160px] max-h-52 overflow-y-auto theme-modal"
+                         :style="'left:' + tagDropdown.x + 'px; top:' + tagDropdown.y + 'px'"
+                         x-transition.opacity.duration.150>
+                        {% for t in tags %}
+                        <div class="px-3 py-1.5 hover:bg-[var(--bg-input)] cursor-pointer text-sm flex items-center gap-2 transition-colors"
+                             @click="toggleTag({{ t.id }}, '{{ t.name | tojson }}', '{{ t.color }}'); tagDropdown.open = false">
+                            <span class="w-2.5 h-2.5 rounded-full" style="background-color: {{ t.color }}"></span>
+                            <span class="theme-text-secondary">{{ t.name }}</span>
+                        </div>
+                        {% endfor %}
+                        {% if not tags %}
+                        <div class="px-3 py-2 text-xs theme-muted" data-i18n="addTagFirst">暂无标签，先在侧边栏创建</div>
+                        {% endif %}
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- 双栏编辑区 -->
+    <div class="flex-1 flex overflow-hidden">
+        <div class="w-1/2 border-r relative" style="border-color: var(--border)">
+            <textarea x-model="content" @keydown.tab.prevent="onTab($el)"
+                      class="w-full h-full resize-none p-8 font-mono text-sm outline-none leading-relaxed
+                             theme-text placeholder:text-[var(--muted)]"
+                      style="background: var(--bg);"
+                      :placeholder="t('mdPlaceholder') + '\n\n## ' + t('tabIndent') + '\n- ' + t('livePreview') + '\n- ' + t('mdHint')"></textarea>
+        </div>
+        <div class="w-1/2 overflow-y-auto p-8" style="background: var(--bg); opacity: 0.8" x-html="preview"></div>
+    </div>
+</div>
+
+<script>
+function editor() {
+    const articleId = {{ article.id if article else 'null' }};
+    let debounceTimer;
+
+    return {
+        title: {{ (article.title or '') | tojson }},
+        content: {{ (article.content or '') | tojson }},
+        categoryId: {{ article.category_id if article and article.category_id else 'null' }},
+        {% if article %}
+        selectedTags: {{ (article.tags | map(attribute='id') | list or []) | tojson }}.map(id => {
+            const found = {{ tags | map(attribute='id') | list | tojson }}.indexOf(id);
+            if (found >= 0) {
+                const names = {{ tags | map(attribute='name') | list | tojson }};
+                const colors = {{ tags | map(attribute='color') | list | tojson }};
+                return {id: id, name: names[found], color: colors[found]};
+            }
+            return null;
+        }).filter(Boolean),
+        {% else %}
+        selectedTags: [],
+        {% endif %}
+        saving: false,
+        preview: '',
+
+        // 标签下拉菜单状态
+        tagDropdown: { open: false, x: 0, y: 0 },
+        openTagDropdown() {
+            const rect = this.$refs.tagBtn.getBoundingClientRect();
+            this.tagDropdown.x = rect.left;
+            this.tagDropdown.y = rect.bottom + 4;
+            this.tagDropdown.open = true;
+        },
+
+        init() {
+            this.updatePreview();
+            this.$watch('content', () => {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => this.updatePreview(), 200);
+            });
+        },
+
+        t(key) {
+            const lang = localStorage.getItem('kb-lang') || 'zh';
+            const dict = {
+                inputTitle: { zh: '请输入标题', en: 'Please enter a title' },
+                saving: { zh: '保存中...', en: 'Saving...' },
+                save: { zh: '保存', en: 'Save' },
+                mdPlaceholder: { zh: '在此编写 Markdown 内容...', en: 'Write Markdown here...' },
+                tabIndent: { zh: 'Tab 缩进', en: 'Tab to indent' },
+                livePreview: { zh: '右侧实时预览', en: 'Live preview on the right' },
+                mdHint: { zh: '支持代码高亮 / 表格 / 图片...', en: 'Supports code highlight / tables / images...' },
+            };
+            const entry = dict[key];
+            return entry ? (entry[lang] || entry.zh) : key;
+        },
+
+        async updatePreview() {
+            if (!this.content.trim()) {
+                this.preview = '<p class="text-[var(--muted)] italic">' + this.t('previewArea') + '</p>';
+                return;
+            }
+            try {
+                const resp = await fetch('/api/preview', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({content: this.content}),
+                });
+                const data = await resp.json();
+                this.preview = data.html;
+            } catch { this.preview = ''; }
+        },
+
+        async save() {
+            if (!this.title.trim()) {
+                window.__kb.showToast(this.t('inputTitle'), 'error');
+                return;
+            }
+            this.saving = true;
+            const body = {
+                title: this.title, content: this.content,
+                category_id: this.categoryId || null,
+                tag_ids: this.selectedTags.map(t => t.id),
+            };
+            try {
+                const resp = await fetch('/api/article' + (articleId ? '/' + articleId : ''), {
+                    method: articleId ? 'PUT' : 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(body),
+                });
+                if (resp.ok) {
+                    window.location.href = '/article/' + (await resp.json()).id;
+                } else {
+                    window.__kb.showToast(this.t('saveError') || 'Save failed', 'error');
+                }
+            } catch {
+                window.__kb.showToast(this.t('networkError') || 'Network error', 'error');
+            } finally { this.saving = false; }
+        },
+
+        async deleteArticle() {
+            const ok = await window.__kb.confirm(
+                (localStorage.getItem('kb-lang') || 'zh') === 'zh'
+                    ? '确认删除这篇笔记？此操作不可撤销。'
+                    : 'Delete this note? This action cannot be undone.',
+                'danger'
+            );
+            if (!ok) return;
+            await fetch('/api/article/' + articleId, {method: 'DELETE'});
+            window.location.href = '/';
+        },
+
+        toggleTag(id, name, color) {
+            const idx = this.selectedTags.findIndex(t => t.id === id);
+            idx >= 0 ? this.selectedTags.splice(idx, 1) : this.selectedTags.push({id, name, color});
+        },
+
+        onTab(el) {
+            const start = el.selectionStart;
+            el.value = el.value.substring(0, start) + '    ' + el.value.substring(el.selectionEnd);
+            el.selectionStart = el.selectionEnd = start + 4;
+            this.content = el.value;
+        },
+    };
+}
+</script>
+{% endblock %}

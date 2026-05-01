@@ -120,6 +120,7 @@ def new_article_page(request: Request, db: Session = Depends(get_db)):
     tags = db.query(Tag).order_by(Tag.name).all()
     return templates.TemplateResponse("edit.html", template_ctx(
         request, article=None, categories=categories, tags=tags,
+        current_category=None, current_tag=None,
     ))
 
 
@@ -129,8 +130,11 @@ def view_article(article_id: int, request: Request, db: Session = Depends(get_db
         Article.id == article_id).first()
     if not article:
         raise HTTPException(status_code=404)
+    categories = db.query(Category).order_by(Category.name).all()
+    tags = db.query(Tag).order_by(Tag.name).all()
     return templates.TemplateResponse("view.html", template_ctx(
-        request, article=article,
+        request, article=article, categories=categories, tags=tags,
+        current_category=article.category_id, current_tag=None,
     ))
 
 
@@ -144,6 +148,7 @@ def edit_article_page(article_id: int, request: Request, db: Session = Depends(g
     tags = db.query(Tag).order_by(Tag.name).all()
     return templates.TemplateResponse("edit.html", template_ctx(
         request, article=article, categories=categories, tags=tags,
+        current_category=article.category_id, current_tag=None,
     ))
 
 
@@ -280,6 +285,7 @@ def ai_page(request: Request, db: Session = Depends(get_db)):
     tags = db.query(Tag).order_by(Tag.name).all()
     return templates.TemplateResponse("ai.html", template_ctx(
         request, categories=categories, tags=tags,
+        current_category=None, current_tag=None,
     ))
 
 

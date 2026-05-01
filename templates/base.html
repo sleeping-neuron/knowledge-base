@@ -107,18 +107,19 @@
                 </h3>
                 <ul class="space-y-0.5">
                     <li>
-                        <a href="/" class="sidebar-item block px-3 py-2 rounded-lg text-sm transition-all duration-200
-                           {% if not current_category %}active{% endif %}" data-i18n="allNotes">全部笔记</a>
+                        <a href="/" class="sidebar-item block px-3 py-2 rounded-lg text-sm transition-all duration-200"
+                           :class="{ active: !currentCategory }" data-i18n="allNotes">全部笔记</a>
                     </li>
-                    {% for cat in categories %}
-                    <li>
-                        <a href="/?category={{ cat.id }}" class="sidebar-item block px-3 py-2 rounded-lg text-sm transition-all duration-200
-                           {% if current_category == cat.id %}active{% endif %}">
-                            {{ cat.name }}
-                            <span class="text-[11px] sidebar-count ml-1.5">({{ cat.article_count }})</span>
-                        </a>
-                    </li>
-                    {% endfor %}
+                    <template x-for="cat in allCategories" :key="cat.id">
+                        <li>
+                            <a :href="'/?category=' + cat.id" class="sidebar-item block px-3 py-2 rounded-lg text-sm transition-all duration-200"
+                               :class="{ active: currentCategory === cat.id }">
+                                <span x-text="cat.name"></span>
+                                <span class="text-[11px] sidebar-count ml-1.5" x-text="'(' + cat.article_count + ')'"></span>
+                            </a>
+                        </li>
+                    </template>
+                    <li x-show="allCategories.length === 0" class="text-xs theme-muted px-3 py-2" data-i18n="noCategories">暂无分类</li>
                 </ul>
             </div>
 
@@ -133,17 +134,15 @@
                     </button>
                 </h3>
                 <div class="flex flex-wrap gap-1.5">
-                    {% for t in tags %}
-                    <a href="/?tag={{ t.id }}"
-                       class="px-2.5 py-1 rounded-full text-xs transition-all duration-200
-                              {% if current_tag == t.id %}ring-2 ring-offset-2 ring-offset-[var(--bg-card)] font-medium{% endif %}"
-                       style="background-color: {{ t.color }}12; color: {{ t.color }}; border: 1px solid {{ t.color }}20">
-                        {{ t.name }}
-                    </a>
-                    {% endfor %}
-                    {% if not tags %}
-                    <span class="text-xs theme-muted" data-i18n="noTags">暂无标签</span>
-                    {% endif %}
+                    <template x-for="t in allTags" :key="t.id">
+                        <a :href="'/?tag=' + t.id"
+                           class="px-2.5 py-1 rounded-full text-xs transition-all duration-200"
+                           :class="{ 'ring-2 ring-offset-2 ring-offset-[var(--bg-card)] font-medium': currentTag === t.id }"
+                           :style="'background-color:' + t.color + '12; color:' + t.color + '; border: 1px solid ' + t.color + '20'">
+                            <span x-text="t.name"></span>
+                        </a>
+                    </template>
+                    <span x-show="allTags.length === 0" class="text-xs theme-muted" data-i18n="noTags">暂无标签</span>
                 </div>
             </div>
         </aside>
@@ -216,7 +215,7 @@
     const I18N = {
         zh: {
             appName: '知识库', newNote: '新建笔记', aiWrite: 'AI 写作',
-            categories: '分类', tags: '标签', allNotes: '全部笔记', noTags: '暂无标签',
+            categories: '分类', tags: '标签', allNotes: '全部笔记', noTags: '暂无标签', noCategories: '暂无分类',
             search: '搜索...', searchTitle: '搜索', results: '条结果',
             notes: '篇笔记', allNotesTitle: '所有笔记',
             edit: '编辑', delete: '删除', save: '保存', saving: '保存中...',
@@ -243,7 +242,7 @@
         },
         en: {
             appName: 'Knowledge Base', newNote: 'New Note', aiWrite: 'AI Write',
-            categories: 'Categories', tags: 'Tags', allNotes: 'All Notes', noTags: 'No tags yet',
+            categories: 'Categories', tags: 'Tags', allNotes: 'All Notes', noTags: 'No tags yet', noCategories: 'No categories yet',
             search: 'Search...', searchTitle: 'Search', results: 'results',
             notes: 'notes', allNotesTitle: 'All Notes',
             edit: 'Edit', delete: 'Delete', save: 'Save', saving: 'Saving...',
@@ -295,6 +294,11 @@
         return {
             lang: 'zh',
             theme: 'dark',
+
+            allCategories: [{% for cat in categories %}{id: {{ cat.id }}, name: {{ cat.name | tojson }}, article_count: {{ cat.article_count }}}{% if not loop.last %},{% endif %}{% endfor %}],
+            allTags: [{% for t in tags %}{id: {{ t.id }}, name: {{ t.name | tojson }}, color: {{ t.color | tojson }}}{% if not loop.last %},{% endif %}{% endfor %}],
+            currentCategory: {{ current_category | tojson }},
+            currentTag: {{ current_tag | tojson }},
 
             init() {
                 window.__kb = this;  // 全局桥接，供子组件跨层级调用
@@ -384,11 +388,14 @@
                 const msg = this.lang === 'zh' ? '输入分类名称' : 'Enter category name';
                 const name = await this.askInput(msg);
                 if (!name) return;
-                await fetch('/api/category', {
+                const resp = await fetch('/api/category', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({name}),
                 });
-                location.reload();
+                if (resp.ok) {
+                    const cat = await resp.json();
+                    this.allCategories.push({id: cat.id, name: cat.name, article_count: 0});
+                }
             },
             async promptTag() {
                 const msg = this.lang === 'zh' ? '输入标签名称' : 'Enter tag name';
@@ -396,11 +403,14 @@
                 if (!name) return;
                 const colors = ['#f87171','#fb923c','#fbbf24','#34d399','#38bdf8','#818cf8','#c084fc','#f472b6'];
                 const color = colors[Math.floor(Math.random() * colors.length)];
-                await fetch('/api/tag', {
+                const resp = await fetch('/api/tag', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({name, color}),
                 });
-                location.reload();
+                if (resp.ok) {
+                    const tag = await resp.json();
+                    this.allTags.push({id: tag.id, name: tag.name, color: tag.color});
+                }
             },
         };
     }

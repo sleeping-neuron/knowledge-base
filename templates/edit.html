@@ -74,16 +74,14 @@
                          class="fixed rounded-xl shadow-2xl py-1 z-[200] min-w-[160px] max-h-52 overflow-y-auto theme-modal"
                          :style="'left:' + tagDropdown.x + 'px; top:' + tagDropdown.y + 'px'"
                          x-transition.opacity.duration.150>
-                        {% for t in tags %}
-                        <div class="px-3 py-1.5 hover:bg-[var(--bg-input)] cursor-pointer text-sm flex items-center gap-2 transition-colors"
-                             @click="toggleTag({{ t.id }}, '{{ t.name | tojson }}', '{{ t.color }}'); tagDropdown.open = false">
-                            <span class="w-2.5 h-2.5 rounded-full" style="background-color: {{ t.color }}"></span>
-                            <span class="theme-text-secondary">{{ t.name }}</span>
-                        </div>
-                        {% endfor %}
-                        {% if not tags %}
-                        <div class="px-3 py-2 text-xs theme-muted" data-i18n="addTagFirst">暂无标签，先在侧边栏创建</div>
-                        {% endif %}
+                        <template x-for="t in allTags" :key="t.id">
+                            <div class="px-3 py-1.5 hover:bg-[var(--bg-input)] cursor-pointer text-sm flex items-center gap-2 transition-colors"
+                                 @click="toggleTag(t.id, t.name, t.color); tagDropdown.open = false">
+                                <span class="w-2.5 h-2.5 rounded-full" :style="'background-color:' + t.color"></span>
+                                <span class="theme-text-secondary" x-text="t.name"></span>
+                            </div>
+                        </template>
+                        <div x-show="allTags.length === 0" class="px-3 py-2 text-xs theme-muted" data-i18n="addTagFirst">暂无标签，先在侧边栏创建</div>
                     </div>
                 </template>
             </div>
@@ -127,6 +125,7 @@ function editor() {
         {% endif %}
         saving: false,
         preview: '',
+        allTags: [],
 
         // 标签下拉菜单状态
         tagDropdown: { open: false, x: 0, y: 0 },
@@ -138,6 +137,7 @@ function editor() {
         },
 
         init() {
+            if (window.__kb) this.allTags = window.__kb.allTags;
             this.updatePreview();
             this.$watch('content', () => {
                 clearTimeout(debounceTimer);

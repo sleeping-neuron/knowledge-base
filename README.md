@@ -24,7 +24,7 @@ python main.py
 3. 填入 DeepSeek API Key（`sk-...`）
 4. 选择模型：Flash（快速）或 Pro（旗舰）
 
-API Key 仅保存在本地 `config.json`，不会上传。
+API Key 仅保存在本地 `config.json`
 
 ## 技术栈
 

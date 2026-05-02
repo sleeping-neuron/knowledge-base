@@ -2,38 +2,67 @@
 {% block title %}{% if query %}{{ query }} - 搜索{% elif current_category_name %}{{ current_category_name }}{% else %}知识库{% endif %}{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto px-8 py-8">
-    <div class="mb-8">
-        {% if query %}
-        <h1 class="text-2xl font-bold theme-text">
-            <span data-i18n="searchTitle">搜索</span> "<span class="text-[var(--accent)]">{{ query }}</span>"
-        </h1>
-        <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="results">条结果</span></p>
-        {% elif current_category_name %}
-        <h1 class="text-2xl font-bold theme-text">{{ current_category_name }}</h1>
-        <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="notes">篇笔记</span></p>
-        {% elif current_tag_name %}
-        <h1 class="text-2xl font-bold theme-text">
-            <span data-i18n="tagLabel">标签</span> <span class="text-[var(--accent)]">#{{ current_tag_name }}</span>
-        </h1>
-        <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="notes">篇笔记</span></p>
-        {% else %}
-        <h1 class="text-2xl font-bold theme-text" data-i18n="allNotesTitle">所有笔记</h1>
-        <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="notes">篇笔记</span></p>
+<div class="max-w-3xl mx-auto px-8 py-8" x-data="listPage()">
+    <div class="mb-6 flex items-center justify-between">
+        <div>
+            {% if query %}
+            <h1 class="text-2xl font-bold theme-text">
+                <span data-i18n="searchTitle">搜索</span> "<span class="text-[var(--accent)]">{{ query }}</span>"
+            </h1>
+            <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="results">条结果</span></p>
+            {% elif current_category_name %}
+            <h1 class="text-2xl font-bold theme-text">{{ current_category_name }}</h1>
+            <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="notes">篇笔记</span></p>
+            {% elif current_tag_name %}
+            <h1 class="text-2xl font-bold theme-text">
+                <span data-i18n="tagLabel">标签</span> <span class="text-[var(--accent)]">#{{ current_tag_name }}</span>
+            </h1>
+            <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="notes">篇笔记</span></p>
+            {% else %}
+            <h1 class="text-2xl font-bold theme-text" data-i18n="allNotesTitle">所有笔记</h1>
+            <p class="text-sm theme-text-secondary mt-2">{{ total }} <span data-i18n="notes">篇笔记</span></p>
+            {% endif %}
+        </div>
+        {% if articles %}
+        <div class="flex items-center gap-3">
+            <!-- 全选（仅在编辑模式下显示） -->
+            <label x-show="editMode" class="flex items-center gap-2 text-xs theme-muted cursor-pointer select-none">
+                <input type="checkbox" :checked="allSelected" @change="toggleSelectAll()"
+                       class="w-4 h-4 rounded accent-indigo-500">
+                <span x-text="lang === 'zh' ? '全选' : 'Select all'"></span>
+            </label>
+            <!-- 编辑模式切换按钮 -->
+            <button @click="toggleEditMode()"
+                    class="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all duration-200"
+                    :class="editMode
+                        ? 'border-indigo-500/20 bg-indigo-500/8 text-indigo-400'
+                        : 'theme-btn-ghost hover:bg-[var(--bg-input)]'">
+                <span x-show="!editMode" x-text="lang === 'zh' ? '选择' : 'Select'"></span>
+                <span x-show="editMode" x-text="lang === 'zh' ? '取消选择' : 'Cancel'"></span>
+            </button>
+        </div>
         {% endif %}
     </div>
 
     {% if articles %}
     <div class="space-y-3">
         {% for article in articles %}
-        <a href="/article/{{ article.id }}" class="group block rounded-2xl border p-5 relative overflow-hidden theme-card">
+        <div class="group flex items-start gap-3 rounded-2xl border p-5 relative overflow-hidden theme-card"
+             :class="{ 'ring-2 ring-indigo-500/30': selectedIds.includes({{ article.id }}) }">
             <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/0 via-indigo-500/0 to-cyan-500/0
                         group-hover:from-indigo-500/[0.04] group-hover:via-violet-500/[0.02] group-hover:to-cyan-500/[0.02]
-                        transition-all duration-500 rounded-2xl"></div>
+                        transition-all duration-500 rounded-2xl"
+                 :class="{ 'from-indigo-500/[0.06] via-violet-500/[0.04] to-cyan-500/[0.04]': selectedIds.includes({{ article.id }}) }"></div>
             <div class="absolute left-0 top-4 bottom-4 w-[3px] rounded-r-full bg-gradient-to-b from-indigo-400 to-cyan-400
                         opacity-0 group-hover:opacity-100 transition-opacity duration-300 scale-y-50 group-hover:scale-y-100"></div>
-            <div class="relative flex items-start justify-between gap-4">
-                <div class="flex-1 min-w-0">
+            <!-- 勾选框（仅编辑模式下显示） -->
+            <div x-show="editMode" class="relative shrink-0 pt-1">
+                <input type="checkbox" :checked="selectedIds.includes({{ article.id }})"
+                       @change="toggleSelect({{ article.id }})"
+                       class="w-4 h-4 rounded accent-indigo-500 cursor-pointer">
+            </div>
+            <a href="/article/{{ article.id }}" class="relative flex-1 min-w-0 flex items-start justify-between gap-4" @click="if(editMode){$event.preventDefault(); toggleSelect({{ article.id }})}">
+                <div class="min-w-0">
                     <h2 class="text-lg font-semibold theme-text group-hover:text-[var(--accent-hover)] transition-colors truncate">
                         {{ article.title }}
                     </h2>
@@ -53,11 +82,10 @@
                     </div>
                 </div>
                 <div class="text-xs theme-muted shrink-0 text-right leading-relaxed">
-                    <div>{{ article.updated_at.strftime('%Y-%m-%d') }}</div>
-                    <div>{{ article.updated_at.strftime('%H:%M') }}</div>
+                    <time class="local-time" datetime="{{ article.updated_at.isoformat() }}"></time>
                 </div>
-            </div>
-        </a>
+            </a>
+        </div>
         {% endfor %}
     </div>
 
@@ -93,5 +121,136 @@
         {% endif %}
     </div>
     {% endif %}
+
+    <!-- 批量操作栏 -->
+    <div x-show="selectedIds.length" x-cloak
+         x-transition:enter="transition ease-out duration-200"
+         x-transition:enter-start="opacity-0 translate-y-4"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 theme-modal rounded-2xl border px-5 py-3 flex items-center gap-4 shadow-2xl">
+        <span class="text-sm font-medium theme-text">
+            <span x-text="lang === 'zh' ? '已选 ' + selectedIds.length + ' 篇' : selectedIds.length + ' selected'"></span>
+        </span>
+        <div class="w-px h-5 theme-border" style="background: var(--border)"></div>
+        <button @click="batchTag()"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium theme-btn-ghost hover:text-[var(--accent)] hover:bg-[var(--bg-input)] transition-all duration-200">
+            <span x-text="lang === 'zh' ? '添加标签' : 'Tag'"></span>
+        </button>
+        <button @click="batchCategory()"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium theme-btn-ghost hover:text-[var(--accent)] hover:bg-[var(--bg-input)] transition-all duration-200">
+            <span x-text="lang === 'zh' ? '移动分类' : 'Categorize'"></span>
+        </button>
+        <button @click="batchDelete()"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/6 transition-all duration-200">
+            <span x-text="lang === 'zh' ? '批量删除' : 'Delete all'"></span>
+        </button>
+        <div class="w-px h-5" style="background: var(--border)"></div>
+        <button @click="selectedIds = []"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium theme-muted hover:theme-text transition-all duration-200">
+            <span x-text="lang === 'zh' ? '取消' : 'Cancel'"></span>
+        </button>
+    </div>
 </div>
+
+<script>
+function listPage() {
+    return {
+        lang: 'zh',
+        editMode: false,
+        selectedIds: [],
+
+        init() {
+            this.lang = localStorage.getItem('kb-lang') || 'zh';
+        },
+
+        toggleEditMode() {
+            this.editMode = !this.editMode;
+            if (!this.editMode) this.selectedIds = [];
+        },
+
+        get allSelected() {
+            const articleIds = [{% for a in articles %}{{ a.id }}{% if not loop.last %},{% endif %}{% endfor %}];
+            return articleIds.length > 0 && articleIds.every(id => this.selectedIds.includes(id));
+        },
+
+        toggleSelect(id) {
+            const idx = this.selectedIds.indexOf(id);
+            idx >= 0 ? this.selectedIds.splice(idx, 1) : this.selectedIds.push(id);
+        },
+
+        toggleSelectAll() {
+            const articleIds = [{% for a in articles %}{{ a.id }}{% if not loop.last %},{% endif %}{% endfor %}];
+            if (this.allSelected) {
+                this.selectedIds = [];
+            } else {
+                this.selectedIds = [...articleIds];
+            }
+        },
+
+        async batchDelete() {
+            const msg = this.lang === 'zh'
+                ? '确认删除选中的 ' + this.selectedIds.length + ' 篇笔记？此操作不可撤销。'
+                : 'Delete ' + this.selectedIds.length + ' selected notes? This cannot be undone.';
+            const ok = await window.__kb.confirm(msg, 'danger');
+            if (!ok) return;
+            await fetch('/api/articles/batch-delete', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ids: this.selectedIds}),
+            });
+            window.location.reload();
+        },
+
+        async batchTag() {
+            const msg = this.lang === 'zh' ? '输入要添加的标签名称' : 'Enter tag name to add';
+            const name = await window.__kb.askInput(msg);
+            if (!name) return;
+            // 查找或创建标签
+            let tag = null;
+            const allTags = window.__kb.allTagsRaw || [];
+            tag = allTags.find(t => t.name.toLowerCase() === name.toLowerCase());
+            if (!tag) {
+                const colors = ['#f87171','#fb923c','#fbbf24','#34d399','#38bdf8','#818cf8','#c084fc','#f472b6'];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                const resp = await fetch('/api/tag', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name, color}),
+                });
+                tag = await resp.json();
+                // 更新全局标签列表
+                window.__kb.allTagsRaw.push({id: tag.id, name: tag.name, color: tag.color, article_count: 0});
+            }
+            await fetch('/api/articles/batch-tag', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ids: this.selectedIds, tag_ids: [tag.id]}),
+            });
+            window.location.reload();
+        },
+
+        async batchCategory() {
+            const msg = this.lang === 'zh' ? '输入分类名称（留空则取消分类）' : 'Enter category name (leave empty to remove)';
+            const name = await window.__kb.askInput(msg);
+            if (name === null) return;
+            let categoryId = null;
+            if (name.trim()) {
+                const cats = window.__kb.allCategories || [];
+                let cat = cats.find(c => c.name.toLowerCase() === name.trim().toLowerCase());
+                if (!cat) {
+                    const resp = await fetch('/api/category', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({name: name.trim()}),
+                    });
+                    cat = await resp.json();
+                    window.__kb.allCategories.push({id: cat.id, name: cat.name, article_count: 0});
+                }
+                categoryId = cat.id;
+            }
+            await fetch('/api/articles/batch-category', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ids: this.selectedIds, category_id: categoryId}),
+            });
+            window.location.reload();
+        },
+    };
+}
+</script>
 {% endblock %}

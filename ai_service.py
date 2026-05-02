@@ -30,9 +30,47 @@ def set_api_key(key: str):
     save_config(cfg)
 
 
+DEFAULT_MODEL = "deepseek-v4-flash"
+
+SCENARIO_MODELS = {
+    "generate": "deepseek-v4-pro",
+    "summarize": "deepseek-v4-flash",
+    "polish": "deepseek-v4-flash",
+    "tags": "deepseek-v4-flash",
+    "related": "deepseek-v4-flash",
+}
+
+
 def get_model() -> str:
     cfg = load_config()
-    return cfg.get("model", "deepseek-v4-flash")
+    return cfg.get("model", DEFAULT_MODEL)
+
+
+def get_model_for(scenario: str) -> str:
+    """获取指定场景的模型，支持全局默认覆盖"""
+    cfg = load_config()
+    models = cfg.get("models", {})
+    if scenario in models:
+        return models[scenario]
+    return cfg.get("model", DEFAULT_MODEL)
+
+
+def get_all_models() -> dict:
+    """返回所有场景的模型配置"""
+    cfg = load_config()
+    result = {}
+    for scenario, default in SCENARIO_MODELS.items():
+        result[scenario] = cfg.get("models", {}).get(scenario, default)
+    return result
+
+
+def set_models(models: dict):
+    """保存场景模型配置"""
+    cfg = load_config()
+    if "models" not in cfg:
+        cfg["models"] = {}
+    cfg["models"].update(models)
+    save_config(cfg)
 
 
 def get_language() -> str:
@@ -68,11 +106,14 @@ When writing notes, follow these rules:
 Output ONLY the article content — no explanations, no "here is the article", just the Markdown."""
 
 
-async def _call_deepseek(messages: list[dict], max_tokens: int = 4096, timeout: int = 120) -> dict:
+async def _call_deepseek(messages: list[dict], max_tokens: int = 4096, timeout: int = 120,
+                        scenario: str = "") -> dict:
     """统一封装 DeepSeek API 调用"""
     api_key = get_api_key()
     if not api_key:
         return {"error": "请先配置 API Key"}
+
+    model = get_model_for(scenario) if scenario else get_model()
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
@@ -83,7 +124,7 @@ async def _call_deepseek(messages: list[dict], max_tokens: int = 4096, timeout: 
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": get_model(),
+                    "model": model,
                     "messages": messages,
                     "max_tokens": max_tokens,
                 },
@@ -123,6 +164,7 @@ async def generate_article(topic: str, lang: str = "zh") -> dict:
         ],
         max_tokens=4096,
         timeout=120,
+        scenario="generate",
     )
 
     if "error" in result:
@@ -176,6 +218,7 @@ async def suggest_tags(content: str, lang: str = "zh") -> list[str]:
         messages=[{"role": "user", "content": prompt}],
         max_tokens=200,
         timeout=30,
+        scenario="tags",
     )
 
     if "error" in result:
@@ -183,3 +226,73 @@ async def suggest_tags(content: str, lang: str = "zh") -> list[str]:
 
     text = result["text"].strip()
     return [t.strip().strip("#") for t in text.split(",") if t.strip()][:6]
+
+
+async def summarize_article(content: str, lang: str = "zh") -> str:
+    """对文章内容生成简短摘要"""
+    lang_instruction = "用中文输出摘要。" if lang == "zh" else "Output summary in English."
+    result = await _call_deepseek(
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Write a concise summary (3-5 sentences) of the following article.\n"
+                f"Focus on the key points and main takeaways.\n"
+                f"{lang_instruction}\n"
+                f"Output only the summary, nothing else.\n\n{content[:6000]}"
+            ),
+        }],
+        max_tokens=500,
+        timeout=60,
+        scenario="summarize",
+    )
+    if "error" in result:
+        return ""
+    return result["text"].strip()
+
+
+async def polish_content(content: str, lang: str = "zh") -> str:
+    """润色 Markdown 内容，改善表达和结构"""
+    lang_instruction = "用中文输出。" if lang == "zh" else "Output in English."
+    result = await _call_deepseek(
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Polish and improve the following Markdown article.\n"
+                f"- Fix grammar and awkward phrasing\n"
+                f"- Improve clarity and readability\n"
+                f"- Keep all original headings, code blocks, and formatting\n"
+                f"- Do NOT add new sections or content, only improve existing writing\n"
+                f"{lang_instruction}\n"
+                f"Output the polished Markdown directly, nothing else.\n\n{content[:8000]}"
+            ),
+        }],
+        max_tokens=4096,
+        timeout=90,
+        scenario="polish",
+    )
+    if "error" in result:
+        return ""
+    return result["text"].strip()
+
+
+async def suggest_related_topics(title: str, content: str, lang: str = "zh") -> list[str]:
+    """根据当前笔记推荐相关话题"""
+    lang_instruction = "用中文输出话题。" if lang == "zh" else "Output topics in English."
+    result = await _call_deepseek(
+        messages=[{
+            "role": "user",
+            "content": (
+                f"Based on this article titled \"{title}\", suggest 5 related topics for further study.\n"
+                f"Each topic should be a specific, actionable subject that extends or complements the material.\n"
+                f"{lang_instruction}\n"
+                f"Output one topic per line, no numbers or bullets.\n\n{content[:3000]}"
+            ),
+        }],
+        max_tokens=400,
+        timeout=30,
+        scenario="related",
+    )
+    if "error" in result:
+        return []
+    lines = [l.strip().lstrip("-#0123456789. ").strip() for l in result["text"].strip().split("\n")]
+    return [l for l in lines if l and len(l) > 2][:5]

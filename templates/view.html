@@ -11,6 +11,16 @@
             <span data-i18n="back">返回</span>
         </a>
         <div class="flex gap-2">
+            <button @click="aiSummary()" :disabled="summarizing"
+                    class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-xl border border-indigo-500/15 text-indigo-400/70 hover:text-indigo-400 hover:bg-indigo-500/6 hover:border-indigo-500/25 transition-all duration-200 disabled:opacity-50">
+                <svg x-show="!summarizing" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+                </svg>
+                <svg x-show="summarizing" class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                </svg>
+                <span x-text="summarizing ? (lang === 'zh' ? '生成中...' : 'Summarizing...') : 'AI 摘要'"></span>
+            </button>
             <a href="/article/{{ article.id }}/edit"
                class="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-xl border theme-btn-ghost hover:bg-[var(--bg-input)] transition-all duration-200">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
@@ -44,8 +54,36 @@
             </span>
             {% endfor %}
             <span class="theme-muted">·</span>
-            <span class="theme-muted"><span data-i18n="created">创建于</span> {{ article.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-            <span class="theme-muted"><span data-i18n="updated">更新于</span> {{ article.updated_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            <span class="theme-muted"><span data-i18n="created">创建于</span> <time class="local-time" datetime="{{ article.created_at.isoformat() }}"></time></span>
+            <span class="theme-muted"><span data-i18n="updated">更新于</span> <time class="local-time" datetime="{{ article.updated_at.isoformat() }}"></time></span>
+        </div>
+
+        <!-- AI 摘要卡片 -->
+        <div x-show="summary" class="mb-6 p-5 rounded-2xl border border-indigo-500/15 bg-indigo-500/[0.03]"
+             x-transition>
+            <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+                </svg>
+                <div>
+                    <h3 class="text-sm font-semibold text-indigo-400 mb-1">AI 摘要</h3>
+                    <p class="text-sm theme-text-secondary leading-relaxed" x-text="summary"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 相关话题推荐 -->
+        <div x-show="relatedTopics.length" class="mb-6" x-transition>
+            <h3 class="text-xs font-semibold theme-label mb-2 uppercase tracking-wider">
+                <span x-text="lang === 'zh' ? '相关探索话题' : 'Related Topics'"></span>
+            </h3>
+            <div class="flex flex-wrap gap-2">
+                <template x-for="topic in relatedTopics" :key="topic">
+                    <a :href="'/ai?topic=' + encodeURIComponent(topic)"
+                       class="px-3 py-1.5 rounded-full text-xs bg-[var(--bg-input)] theme-text-secondary border hover:border-indigo-500/30 hover:text-[var(--accent)] transition-all duration-200"
+                       x-text="topic"></a>
+                </template>
+            </div>
         </div>
 
         <div class="rounded-2xl border p-8 md:p-10 theme-card">
@@ -61,9 +99,59 @@
 <script>
 function viewer() {
     return {
+        lang: 'zh',
+        summarizing: false,
+        summary: '',
+        relatedTopics: [],
+
+        init() {
+            this.lang = localStorage.getItem('kb-lang') || 'zh';
+        },
+
+        async aiSummary() {
+            this.summarizing = true;
+            try {
+                const resp = await fetch('/api/ai/summarize', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        content: {{ article.content | tojson }},
+                        lang: this.lang,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.summary) {
+                    this.summary = data.summary;
+                    // 自动获取相关话题
+                    this.fetchRelated();
+                } else if (data.error) {
+                    window.__kb.showToast(data.error, 'error');
+                }
+            } catch {
+                window.__kb.showToast(this.lang === 'zh' ? '网络错误' : 'Network error', 'error');
+            } finally {
+                this.summarizing = false;
+            }
+        },
+
+        async fetchRelated() {
+            try {
+                const resp = await fetch('/api/ai/related', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        title: {{ article.title | tojson }},
+                        content: {{ article.content | tojson }},
+                        lang: this.lang,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.topics) {
+                    this.relatedTopics = data.topics;
+                }
+            } catch {}
+        },
+
         async onDelete() {
-            const lang = localStorage.getItem('kb-lang') || 'zh';
-            const msg = lang === 'zh'
+            const msg = this.lang === 'zh'
                 ? '确认删除这篇笔记？此操作不可撤销。'
                 : 'Delete this note? This action cannot be undone.';
             const ok = await window.__kb.confirm(msg, 'danger');

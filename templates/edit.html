@@ -10,6 +10,19 @@
                class="flex-1 text-lg font-semibold border-none outline-none bg-transparent
                       placeholder:text-[var(--muted)] theme-text">
         <div class="flex items-center gap-2 shrink-0">
+            <button @click="polish()" :disabled="polishing || !content.trim()"
+                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-medium
+                           text-indigo-400/80 border border-indigo-500/15
+                           hover:text-indigo-400 hover:bg-indigo-500/6 hover:border-indigo-500/25
+                           transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed">
+                <svg x-show="!polishing" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+                </svg>
+                <svg x-show="polishing" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                </svg>
+                <span>AI 润色</span>
+            </button>
             <button @click="save()"
                     class="inline-flex items-center gap-1.5 px-5 py-1.5 rounded-xl text-sm font-medium text-white
                            bg-gradient-to-r from-indigo-500 to-violet-500
@@ -124,6 +137,7 @@ function editor() {
         selectedTags: [],
         {% endif %}
         saving: false,
+        polishing: false,
         preview: '',
         allTags: [],
 
@@ -200,6 +214,30 @@ function editor() {
             } catch {
                 window.__kb.showToast(this.t('networkError') || 'Network error', 'error');
             } finally { this.saving = false; }
+        },
+
+        async polish() {
+            if (!this.content.trim()) return;
+            this.polishing = true;
+            try {
+                const lang = localStorage.getItem('kb-lang') || 'zh';
+                const resp = await fetch('/api/ai/polish', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({content: this.content, lang}),
+                });
+                const data = await resp.json();
+                if (data.content) {
+                    this.content = data.content;
+                    this.updatePreview();
+                    window.__kb.showToast(
+                        lang === 'zh' ? 'AI 润色完成' : 'AI polish done', 'info'
+                    );
+                } else if (data.error) {
+                    window.__kb.showToast(data.error, 'error');
+                }
+            } catch {
+                window.__kb.showToast('Network error', 'error');
+            } finally { this.polishing = false; }
         },
 
         async deleteArticle() {

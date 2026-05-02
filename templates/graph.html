@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}知识图谱{% endblock %}
+
+{% block content %}
+<div class="max-w-full mx-auto px-4 py-4 h-full" x-data="graphPage()" x-init="init()">
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-xl font-bold theme-text">知识图谱</h1>
+        <div class="flex items-center gap-3 text-xs theme-muted">
+            <span class="flex items-center gap-1">
+                <span class="w-3 h-3 rounded-full bg-[var(--accent)]"></span> 节点=笔记
+            </span>
+            <span class="flex items-center gap-1">
+                <span class="w-[12px] h-[1.5px] bg-[var(--muted)] inline-block"></span> 连线=关联
+            </span>
+        </div>
+    </div>
+
+    <div class="rounded-2xl border theme-card overflow-hidden" style="height: calc(100vh - 10rem);">
+        <svg id="graph-svg" width="100%" height="100%"></svg>
+    </div>
+
+    <!-- 提示文字 -->
+    <p class="text-center text-xs theme-muted mt-3">
+        <span x-text="lang === 'zh' ? '拖拽节点调整位置 · 滚轮缩放 · 点击节点打开笔记' : 'Drag to move · Scroll to zoom · Click to open note'"></span>
+    </p>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+function graphPage() {
+    return {
+        lang: 'zh',
+        init() {
+            this.lang = localStorage.getItem('kb-lang') || 'zh';
+            this.buildGraph();
+        },
+
+        async buildGraph() {
+            const resp = await fetch('/api/graph/data');
+            const data = await resp.json();
+
+            if (!data.nodes.length) {
+                d3.select('#graph-svg').append('text')
+                    .attr('x', '50%').attr('y', '50%')
+                    .attr('text-anchor', 'middle')
+                    .attr('fill', 'var(--muted)')
+                    .text(this.lang === 'zh' ? '暂无笔记数据' : 'No notes yet');
+                return;
+            }
+
+            const svg = d3.select('#graph-svg');
+            const width = svg.node().clientWidth;
+            const height = svg.node().clientHeight;
+
+            svg.selectAll('*').remove();
+
+            const g = svg.append('g');
+
+            // 缩放
+            const zoom = d3.zoom()
+                .scaleExtent([0.2, 5])
+                .on('zoom', (event) => { g.attr('transform', event.transform); });
+            svg.call(zoom);
+            svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2));
+
+            // 力模拟
+            const simulation = d3.forceSimulation(data.nodes)
+                .force('link', d3.forceLink(data.edges).id(d => d.id).distance(d => 120 - d.weight * 15))
+                .force('charge', d3.forceManyBody().strength(-200))
+                .force('center', d3.forceCenter(0, 0))
+                .force('collision', d3.forceCollide().radius(d => d.size + 5));
+
+            // 连线
+            const link = g.append('g')
+                .selectAll('line')
+                .data(data.edges)
+                .join('line')
+                .attr('stroke', 'var(--muted)')
+                .attr('stroke-opacity', d => 0.08 + d.weight * 0.06)
+                .attr('stroke-width', d => 0.5 + d.weight * 0.5);
+
+            // 节点组
+            const node = g.append('g')
+                .selectAll('g')
+                .data(data.nodes)
+                .join('g')
+                .style('cursor', 'pointer')
+                .on('click', (event, d) => {
+                    event.stopPropagation();
+                    window.location.href = '/article/' + d.id;
+                });
+
+            // 节点圆
+            node.append('circle')
+                .attr('r', d => d.size)
+                .attr('fill', d => d.color)
+                .attr('fill-opacity', 0.75)
+                .attr('stroke', d => d.color)
+                .attr('stroke-opacity', 0.3)
+                .attr('stroke-width', 1.5);
+
+            // 节点文字
+            node.append('text')
+                .text(d => d.title.length > 12 ? d.title.slice(0, 12) + '...' : d.title)
+                .attr('text-anchor', 'middle')
+                .attr('dy', d => d.size + 12)
+                .attr('fill', 'var(--text-secondary)')
+                .attr('font-size', '11px');
+
+            // 拖拽
+            node.call(d3.drag()
+                .on('start', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    d.fx = d.x;
+                    d.fy = d.y;
+                })
+                .on('drag', (event, d) => {
+                    d.fx = event.x;
+                    d.fy = event.y;
+                })
+                .on('end', (event, d) => {
+                    if (!event.active) simulation.alphaTarget(0);
+                    d.fx = null;
+                    d.fy = null;
+                }));
+
+            // 更新位置
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            // 空白处点击重置缩放
+            svg.on('click', (event) => {
+                if (event.target === svg.node()) {
+                    svg.transition().duration(500).call(
+                        zoom.transform, d3.zoomIdentity.translate(width / 2, height / 2)
+                    );
+                }
+            });
+        },
+    };
+}
+</script>
+{% endblock %}

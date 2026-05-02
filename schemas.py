@@ -28,6 +28,7 @@ class TagOut(BaseModel):
     id: int
     name: str
     color: str
+    article_count: int = 0
 
     model_config = {"from_attributes": True}
 

@@ -15,6 +15,7 @@ from database import Base, engine, get_db
 from models import Category, Article, Tag, article_tag
 from schemas import (ArticleCreate, ArticleUpdate, ArticleOut, ArticleListItem,
                      CategoryCreate, CategoryOut, TagCreate, TagOut)
+from pydantic import BaseModel as PydanticBaseModel
 from search import search_articles
 
 # --- 应用初始化 ---
@@ -93,7 +94,7 @@ def index(request: Request, category: Optional[int] = None,
         ))
 
     categories = db.query(Category).order_by(Category.name).all()
-    tags = db.query(Tag).order_by(Tag.name).all()
+    tags = db.query(Tag).order_by(desc(Tag.article_count)).all()
 
     # 解析当前筛选的名称用于页面展示
     current_category_name = None
@@ -117,7 +118,7 @@ def index(request: Request, category: Optional[int] = None,
 @app.get("/new", response_class=HTMLResponse)
 def new_article_page(request: Request, db: Session = Depends(get_db)):
     categories = db.query(Category).order_by(Category.name).all()
-    tags = db.query(Tag).order_by(Tag.name).all()
+    tags = db.query(Tag).order_by(desc(Tag.article_count)).all()
     return templates.TemplateResponse("edit.html", template_ctx(
         request, article=None, categories=categories, tags=tags,
         current_category=None, current_tag=None,
@@ -131,7 +132,7 @@ def view_article(article_id: int, request: Request, db: Session = Depends(get_db
     if not article:
         raise HTTPException(status_code=404)
     categories = db.query(Category).order_by(Category.name).all()
-    tags = db.query(Tag).order_by(Tag.name).all()
+    tags = db.query(Tag).order_by(desc(Tag.article_count)).all()
     return templates.TemplateResponse("view.html", template_ctx(
         request, article=article, categories=categories, tags=tags,
         current_category=article.category_id, current_tag=None,
@@ -145,7 +146,7 @@ def edit_article_page(article_id: int, request: Request, db: Session = Depends(g
     if not article:
         raise HTTPException(status_code=404)
     categories = db.query(Category).order_by(Category.name).all()
-    tags = db.query(Tag).order_by(Tag.name).all()
+    tags = db.query(Tag).order_by(desc(Tag.article_count)).all()
     return templates.TemplateResponse("edit.html", template_ctx(
         request, article=article, categories=categories, tags=tags,
         current_category=article.category_id, current_tag=None,
@@ -198,6 +199,55 @@ def api_delete_article(article_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+class BatchDeleteRequest(PydanticBaseModel):
+    ids: list[int]
+
+
+@app.post("/api/articles/batch-delete")
+def api_batch_delete(data: BatchDeleteRequest, db: Session = Depends(get_db)):
+    if not data.ids:
+        return {"ok": True, "deleted": 0}
+    count = db.query(Article).filter(Article.id.in_(data.ids)).delete(synchronize_session="fetch")
+    db.commit()
+    return {"ok": True, "deleted": count}
+
+
+class BatchTagRequest(PydanticBaseModel):
+    ids: list[int]
+    tag_ids: list[int]
+
+
+@app.post("/api/articles/batch-tag")
+def api_batch_tag(data: BatchTagRequest, db: Session = Depends(get_db)):
+    if not data.ids or not data.tag_ids:
+        return {"ok": True, "updated": 0}
+    articles = db.query(Article).filter(Article.id.in_(data.ids)).all()
+    new_tags = db.query(Tag).filter(Tag.id.in_(data.tag_ids)).all()
+    for a in articles:
+        existing_ids = {t.id for t in a.tags}
+        for t in new_tags:
+            if t.id not in existing_ids:
+                a.tags.append(t)
+    db.commit()
+    return {"ok": True, "updated": len(articles)}
+
+
+class BatchCategoryRequest(PydanticBaseModel):
+    ids: list[int]
+    category_id: int | None
+
+
+@app.post("/api/articles/batch-category")
+def api_batch_category(data: BatchCategoryRequest, db: Session = Depends(get_db)):
+    if not data.ids:
+        return {"ok": True, "updated": 0}
+    count = db.query(Article).filter(Article.id.in_(data.ids)).update(
+        {"category_id": data.category_id}, synchronize_session="fetch"
+    )
+    db.commit()
+    return {"ok": True, "updated": count}
+
+
 # --- API：分类 ---
 
 @app.get("/api/categories", response_model=list[CategoryOut])
@@ -219,6 +269,9 @@ def api_delete_category(category_id: int, db: Session = Depends(get_db)):
     cat = db.query(Category).filter(Category.id == category_id).first()
     if not cat:
         raise HTTPException(status_code=404)
+    # 先将该分类下的文章取消分类，避免级联删除文章
+    db.query(Article).filter(Article.category_id == category_id).update(
+        {"category_id": None})
     db.delete(cat)
     db.commit()
     return {"ok": True}
@@ -252,8 +305,6 @@ def api_delete_tag(tag_id: int, db: Session = Depends(get_db)):
 
 # --- API：Markdown 预览 ---
 
-from pydantic import BaseModel as PydanticBaseModel
-
 
 class PreviewRequest(PydanticBaseModel):
     content: str
@@ -282,7 +333,7 @@ async def api_upload(file: UploadFile):
 @app.get("/ai", response_class=HTMLResponse)
 def ai_page(request: Request, db: Session = Depends(get_db)):
     categories = db.query(Category).order_by(Category.name).all()
-    tags = db.query(Tag).order_by(Tag.name).all()
+    tags = db.query(Tag).order_by(desc(Tag.article_count)).all()
     return templates.TemplateResponse("ai.html", template_ctx(
         request, categories=categories, tags=tags,
         current_category=None, current_tag=None,
@@ -297,11 +348,16 @@ from pydantic import BaseModel as ConfigModel
 class ApiKeySet(ConfigModel):
     api_key: str
     model: str = "deepseek-v4-flash"
+    models: dict | None = None
 
 
 class ConfigSet(ConfigModel):
     language: str | None = None
     theme: str | None = None
+
+
+class ModelsSet(ConfigModel):
+    models: dict
 
 
 @app.post("/api/config/apikey")
@@ -310,6 +366,8 @@ def api_set_apikey(data: ApiKeySet):
     ai_service.set_api_key(data.api_key)
     cfg = ai_service.load_config()
     cfg["model"] = data.model
+    if data.models:
+        cfg["models"] = data.models
     ai_service.save_config(cfg)
     return {"ok": True}
 
@@ -321,9 +379,17 @@ def api_get_config():
     return {
         "has_api_key": bool(ai_service.get_api_key()),
         "model": cfg.get("model", "deepseek-v4-flash"),
+        "models": ai_service.get_all_models(),
         "language": ai_service.get_language(),
         "theme": ai_service.get_theme(),
     }
+
+
+@app.post("/api/config/models")
+def api_set_models(data: ModelsSet):
+    import ai_service
+    ai_service.set_models(data.models)
+    return {"ok": True}
 
 
 @app.post("/api/config")
@@ -362,6 +428,43 @@ async def api_ai_suggest_tags(data: AISuggestTagsRequest):
     return {"tags": tags}
 
 
+class AISummarizeRequest(ConfigModel):
+    content: str
+    lang: str = "zh"
+
+
+@app.post("/api/ai/summarize")
+async def api_ai_summarize(data: AISummarizeRequest):
+    import ai_service
+    summary = await ai_service.summarize_article(data.content, data.lang)
+    return {"summary": summary}
+
+
+class AIPolishRequest(ConfigModel):
+    content: str
+    lang: str = "zh"
+
+
+@app.post("/api/ai/polish")
+async def api_ai_polish(data: AIPolishRequest):
+    import ai_service
+    polished = await ai_service.polish_content(data.content, data.lang)
+    return {"content": polished}
+
+
+class AIRelatedRequest(ConfigModel):
+    title: str
+    content: str
+    lang: str = "zh"
+
+
+@app.post("/api/ai/related")
+async def api_ai_related(data: AIRelatedRequest):
+    import ai_service
+    topics = await ai_service.suggest_related_topics(data.title, data.content, data.lang)
+    return {"topics": topics}
+
+
 # --- 辅助函数 ---
 
 def _article_out(article: Article) -> ArticleOut:
@@ -376,6 +479,70 @@ def _article_out(article: Article) -> ArticleOut:
         created_at=article.created_at,
         updated_at=article.updated_at,
     )
+
+
+# --- 知识图谱 ---
+
+@app.get("/graph", response_class=HTMLResponse)
+def graph_page(request: Request, db: Session = Depends(get_db)):
+    categories = db.query(Category).order_by(Category.name).all()
+    tags = db.query(Tag).order_by(desc(Tag.article_count)).all()
+    return templates.TemplateResponse("graph.html", template_ctx(
+        request, categories=categories, tags=tags,
+        current_category=None, current_tag=None,
+    ))
+
+
+@app.get("/api/graph/data")
+def api_graph_data(db: Session = Depends(get_db)):
+    articles = db.query(Article).options(joinedload(Article.tags)).all()
+    tags = db.query(Tag).all()
+
+    category_colors = {}
+    color_palette = [
+        "#818cf8", "#34d399", "#fbbf24", "#f87171", "#38bdf8",
+        "#c084fc", "#fb923c", "#f472b6", "#a3e635", "#94a3b8",
+    ]
+    categories = db.query(Category).all()
+    for i, cat in enumerate(categories):
+        category_colors[cat.id] = color_palette[i % len(color_palette)]
+
+    nodes = []
+    for a in articles:
+        node_color = "#6366f1"
+        if a.category_id and a.category_id in category_colors:
+            node_color = category_colors[a.category_id]
+        nodes.append({
+            "id": a.id,
+            "title": a.title,
+            "category_id": a.category_id,
+            "category_name": a.category.name if a.category else None,
+            "tag_count": len(a.tags),
+            "color": node_color,
+            "size": 8 + len(a.tags) * 1.5,
+        })
+
+    edges = []
+    article_tag_map = {}
+    for a in articles:
+        article_tag_map[a.id] = {t.id for t in a.tags}
+
+    article_ids = [a.id for a in articles]
+    for i in range(len(article_ids)):
+        for j in range(i + 1, len(article_ids)):
+            aid, bid = article_ids[i], article_ids[j]
+            shared = article_tag_map[aid] & article_tag_map[bid]
+            same_cat = False
+            a_obj = next((x for x in articles if x.id == aid), None)
+            b_obj = next((x for x in articles if x.id == bid), None)
+            if a_obj and b_obj and a_obj.category_id and b_obj.category_id:
+                if a_obj.category_id == b_obj.category_id:
+                    same_cat = True
+            weight = len(shared) + (1 if same_cat else 0)
+            if weight > 0:
+                edges.append({"source": aid, "target": bid, "weight": weight})
+
+    return {"nodes": nodes, "edges": edges}
 
 
 # --- 启动入口 ---

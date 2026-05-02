@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import (Column, Integer, String, Text, DateTime, ForeignKey,
-                        Table, event, text)
-from sqlalchemy.orm import relationship
+                        Table, event, text, select, func)
+from sqlalchemy.orm import relationship, column_property
 from database import Base, engine
 
 
@@ -35,8 +35,8 @@ class Article(Base):
     content = Column(Text, default="")
     rendered_content = Column(Text, default="")
     category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc),
                         onupdate=lambda: datetime.now(timezone.utc))
 
     category = relationship("Category", back_populates="articles")
@@ -52,6 +52,13 @@ class Tag(Base):
     color = Column(String(7), default="#6366f1")
 
     articles = relationship("Article", secondary=article_tag, back_populates="tags")
+
+    article_count = column_property(
+        select(func.count(article_tag.c.article_id))
+        .where(article_tag.c.tag_id == id)
+        .correlate_except(article_tag)
+        .scalar_subquery()
+    )
 
 
 # --- FTS5 full-text search virtual table (created via raw SQL) ---

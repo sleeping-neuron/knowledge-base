@@ -38,6 +38,10 @@ SCENARIO_MODELS = {
     "polish": "deepseek-v4-flash",
     "tags": "deepseek-v4-flash",
     "related": "deepseek-v4-flash",
+    "analyze": "deepseek-v4-pro",
+    "plan": "deepseek-v4-pro",
+    "organize": "deepseek-v4-pro",
+    "expand": "deepseek-v4-pro",
 }
 
 
@@ -296,3 +300,183 @@ async def suggest_related_topics(title: str, content: str, lang: str = "zh") -> 
         return []
     lines = [l.strip().lstrip("-#0123456789. ").strip() for l in result["text"].strip().split("\n")]
     return [l for l in lines if l and len(l) > 2][:5]
+
+
+async def analyze_category_gaps(category_name: str, articles: list[dict], lang: str = "zh") -> dict:
+    """分析某个分类下的知识缺口 - 识别缺失的重要子主题"""
+    import json as _json
+    lang_instruction = "用中文输出。" if lang == "zh" else "Output in English."
+
+    articles_summary = _json.dumps(articles, ensure_ascii=False, indent=2)
+
+    prompt = (
+        f"Analyze the knowledge coverage for the category \"{category_name}\".\n\n"
+        f"Existing articles in this category:\n{articles_summary}\n\n"
+        f"Task:\n"
+        f"1. Identify important sub-topics that are MISSING from this category\n"
+        f"2. Rate each gap by importance (high/medium/low)\n"
+        f"3. For each gap, explain briefly why it's important to cover\n"
+        f"4. Give a one-paragraph overall assessment of the category's knowledge completeness\n\n"
+        f"{lang_instruction}\n\n"
+        f"Respond in strict JSON format:\n"
+        f'{{"overall_assessment": "...", "gaps": [{{"topic": "...", "importance": "high/medium/low", '
+        f'"reason": "..."}}]}}\n\n'
+        f"Output only the JSON, nothing else."
+    )
+
+    result = await _call_deepseek(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=4096,
+        timeout=120,
+        scenario="analyze",
+    )
+
+    if "error" in result:
+        return result
+
+    try:
+        text = result["text"].strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1]
+            if text.endswith("```"):
+                text = text[:-3]
+            elif text.endswith("\n```"):
+                text = text[:-4]
+        return _json.loads(text)
+    except (ValueError, _json.JSONDecodeError):
+        return {"error": "解析 AI 返回结果失败", "raw": result["text"]}
+
+
+async def generate_knowledge_plan(category_name: str, articles: list[dict],
+                                  gaps: list[dict], lang: str = "zh") -> dict:
+    """基于知识缺口生成知识体系完善计划 - 规划 3~8 篇待写笔记"""
+    import json as _json
+    lang_instruction = "用中文输出。" if lang == "zh" else "Output in English."
+
+    articles_summary = _json.dumps(articles, ensure_ascii=False, indent=2)
+    gaps_summary = _json.dumps(gaps, ensure_ascii=False, indent=2)
+
+    prompt = (
+        f"Create a knowledge completion plan for the category \"{category_name}\".\n\n"
+        f"Existing articles:\n{articles_summary}\n\n"
+        f"Identified knowledge gaps:\n{gaps_summary}\n\n"
+        f"Task: Plan 3-8 new articles to fill the most important gaps and complete the knowledge system.\n"
+        f"{lang_instruction}\n\n"
+        f"Respond in strict JSON format:\n"
+        f'{{"plan_title": "...", "articles": ['
+        f'{{"title": "...", "description": "...", "key_points": ["...", "..."]}}'
+        f']}}\n\n'
+        f"Output only the JSON, nothing else."
+    )
+
+    result = await _call_deepseek(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=4096,
+        timeout=120,
+        scenario="plan",
+    )
+
+    if "error" in result:
+        return result
+
+    try:
+        text = result["text"].strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1]
+            if text.endswith("```"):
+                text = text[:-3]
+            elif text.endswith("\n```"):
+                text = text[:-4]
+        return _json.loads(text)
+    except (ValueError, _json.JSONDecodeError):
+        return {"error": "解析 AI 返回结果失败", "raw": result["text"]}
+
+
+async def organize_notes(notes: list[dict], instruction: str = "", lang: str = "zh") -> dict:
+    """整理多篇笔记 — 交叉比对、去重、合并、补充关联"""
+    import json as _json
+    lang_instruction = "用中文输出。" if lang == "zh" else "Output in English."
+
+    notes_json = _json.dumps(notes, ensure_ascii=False, indent=2)
+    instruction_text = f"\nAdditional user instruction: {instruction}" if instruction else ""
+
+    prompt = (
+        f"Organize and reconcile the following knowledge base notes.{instruction_text}\n\n"
+        f"Notes:\n{notes_json}\n\n"
+        f"Task:\n"
+        f"1. Identify overlapping or duplicate content across notes\n"
+        f"2. Suggest merges where multiple notes cover the same topic\n"
+        f"3. Identify notes that should be updated (outdated, incomplete, or inconsistent)\n"
+        f"4. Suggest a better organization structure (category, tags)\n"
+        f"5. Write a brief analysis summary\n\n"
+        f"{lang_instruction}\n\n"
+        f"Respond in strict JSON format:\n"
+        f'{{"analysis": "...", "actions": ['
+        f'{{"action": "keep|merge|update|delete", "note_ids": [1, 2], '
+        f'"title": "...", "reason": "...", "suggested_content": "..."}}'
+        f']}}\n\n'
+        f"Output only the JSON, nothing else."
+    )
+
+    result = await _call_deepseek(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=8192,
+        timeout=180,
+        scenario="organize",
+    )
+
+    if "error" in result:
+        return result
+
+    try:
+        text = result["text"].strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1]
+            if text.endswith("```"):
+                text = text[:-3]
+            elif text.endswith("\n```"):
+                text = text[:-4]
+        return _json.loads(text)
+    except (ValueError, _json.JSONDecodeError):
+        return {"error": "解析 AI 返回结果失败", "raw": result["text"]}
+
+
+async def expand_topic(topic: str, count: int = 5, lang: str = "zh") -> dict:
+    """将一个大主题拆解为多个子主题，用于批量生成"""
+    import json as _json
+    lang_instruction = "用中文输出。" if lang == "zh" else "Output in English."
+
+    prompt = (
+        f"Break down the topic \"{topic}\" into {count} specific sub-topics for creating "
+        f"a comprehensive knowledge base article series.\n\n"
+        f"{lang_instruction}\n"
+        f"Each sub-topic should be a focused, self-contained subject that together "
+        f"form a complete understanding of the main topic.\n\n"
+        f"Respond in strict JSON format:\n"
+        f'{{"main_topic": "...", "sub_topics": ['
+        f'{{"title": "...", "description": "...", "category": "..."}}'
+        f']}}\n\n'
+        f"Output only the JSON, nothing else."
+    )
+
+    result = await _call_deepseek(
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=4096,
+        timeout=90,
+        scenario="expand",
+    )
+
+    if "error" in result:
+        return result
+
+    try:
+        text = result["text"].strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1]
+            if text.endswith("```"):
+                text = text[:-3]
+            elif text.endswith("\n```"):
+                text = text[:-4]
+        return _json.loads(text)
+    except (ValueError, _json.JSONDecodeError):
+        return {"error": "解析 AI 返回结果失败", "raw": result["text"]}

@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -43,7 +44,24 @@ html_formatter = HtmlFormatter(style="monokai", cssclass="highlight")
 def render_markdown(content: str) -> str:
     if not content:
         return ""
+    # 保护 LaTeX 公式，避免 markdown 处理器破坏（如下划线变 <em>）
+    math_blocks = []
+
+    def save_math(m):
+        math_blocks.append(m.group(0))
+        return f"\x00MATH{len(math_blocks) - 1}\x00"
+
+    # 先保护 $$...$$ 块级公式（允许跨行、包含 $ 符号）
+    content = re.sub(r'\$\$(.+?)\$\$', save_math, content, flags=re.DOTALL)
+    # 再保护 $...$ 行内公式
+    content = re.sub(r'\$([^$\n]+?)\$', save_math, content)
+
     body = md_processor.reset().convert(content)
+
+    # 还原公式
+    for i, block in enumerate(math_blocks):
+        body = body.replace(f"\x00MATH{i}\x00", block)
+
     return f'<div class="markdown-body">{body}</div>'
 
 
@@ -284,6 +302,26 @@ def api_tags(db: Session = Depends(get_db)):
     return db.query(Tag).order_by(Tag.name).all()
 
 
+# --- API：文章列表（轻量，供 AI 选择器等使用）---
+
+@app.get("/api/articles")
+def api_articles(q: str = "", limit: int = 50, db: Session = Depends(get_db)):
+    query = db.query(Article).options(joinedload(Article.tags), joinedload(Article.category))
+    if q:
+        article_ids = search_articles(q)
+        if not article_ids:
+            return []
+        query = query.filter(Article.id.in_(article_ids[:limit]))
+    articles = query.order_by(desc(Article.updated_at)).limit(limit).all()
+    return [{
+        "id": a.id,
+        "title": a.title,
+        "category": a.category.name if a.category else None,
+        "tags": [t.name for t in a.tags],
+        "snippet": a.content[:200].replace("\n", " ") if a.content else "",
+    } for a in articles]
+
+
 @app.post("/api/tag", response_model=TagOut)
 def api_create_tag(data: TagCreate, db: Session = Depends(get_db)):
     tag = Tag(name=data.name, color=data.color)
@@ -363,7 +401,9 @@ class ModelsSet(ConfigModel):
 @app.post("/api/config/apikey")
 def api_set_apikey(data: ApiKeySet):
     import ai_service
-    ai_service.set_api_key(data.api_key)
+    # 只有提供了非空 key 才更新，避免误清空
+    if data.api_key.strip():
+        ai_service.set_api_key(data.api_key.strip())
     cfg = ai_service.load_config()
     cfg["model"] = data.model
     if data.models:
@@ -463,6 +503,163 @@ async def api_ai_related(data: AIRelatedRequest):
     import ai_service
     topics = await ai_service.suggest_related_topics(data.title, data.content, data.lang)
     return {"topics": topics}
+
+
+# --- API：AI 知识体系完善 ---
+
+class AIAnalyzeCategoryRequest(ConfigModel):
+    category_id: int
+    lang: str = "zh"
+
+
+@app.post("/api/ai/analyze-category")
+async def api_ai_analyze_category(data: AIAnalyzeCategoryRequest, db: Session = Depends(get_db)):
+    import ai_service
+    cat = db.query(Category).filter(Category.id == data.category_id).first()
+    if not cat:
+        return {"error": "分类不存在"}
+
+    articles = db.query(Article).filter(Article.category_id == data.category_id).all()
+    if not articles:
+        return {"error": "该分类下没有笔记，无需分析"}
+
+    articles_data = [
+        {"id": a.id, "title": a.title, "snippet": a.content[:300]}
+        for a in articles
+    ]
+
+    result = await ai_service.analyze_category_gaps(cat.name, articles_data, data.lang)
+    return result
+
+
+class AIKnowledgePlanRequest(ConfigModel):
+    category_id: int
+    gaps: list[dict]
+    lang: str = "zh"
+
+
+@app.post("/api/ai/knowledge-plan")
+async def api_ai_knowledge_plan(data: AIKnowledgePlanRequest, db: Session = Depends(get_db)):
+    import ai_service
+    cat = db.query(Category).filter(Category.id == data.category_id).first()
+    if not cat:
+        return {"error": "分类不存在"}
+
+    articles = db.query(Article).filter(Article.category_id == data.category_id).all()
+    articles_data = [
+        {"id": a.id, "title": a.title, "snippet": a.content[:300]}
+        for a in articles
+    ]
+
+    result = await ai_service.generate_knowledge_plan(
+        cat.name, articles_data, data.gaps, data.lang
+    )
+    return result
+
+
+# --- API：AI 笔记整理 ---
+
+class AIOrganizeRequest(ConfigModel):
+    article_ids: list[int]
+    instruction: str = ""
+    lang: str = "zh"
+
+
+@app.post("/api/ai/organize")
+async def api_ai_organize(data: AIOrganizeRequest, db: Session = Depends(get_db)):
+    import ai_service
+    articles = db.query(Article).filter(Article.id.in_(data.article_ids)).all()
+    if not articles:
+        return {"error": "未找到指定笔记"}
+
+    notes_data = [
+        {
+            "id": a.id,
+            "title": a.title,
+            "content": a.content[:4000],
+            "category": a.category.name if a.category else None,
+            "tags": [t.name for t in a.tags],
+        }
+        for a in articles
+    ]
+
+    result = await ai_service.organize_notes(notes_data, data.instruction, data.lang)
+    return result
+
+
+# --- API：AI 主题拆解 ---
+
+class AIExpandTopicRequest(ConfigModel):
+    topic: str
+    count: int = 5
+    lang: str = "zh"
+
+
+@app.post("/api/ai/expand-topic")
+async def api_ai_expand_topic(data: AIExpandTopicRequest):
+    import ai_service
+    result = await ai_service.expand_topic(data.topic, data.count, data.lang)
+    return result
+
+
+# --- API：AI 批量保存 ---
+
+class AIBatchSaveItem(ConfigModel):
+    title: str
+    content: str
+    category: str = ""
+    tags: list[str] = []
+
+
+class AIBatchSaveRequest(ConfigModel):
+    articles: list[AIBatchSaveItem]
+
+
+@app.post("/api/ai/batch-save")
+def api_ai_batch_save(data: AIBatchSaveRequest, db: Session = Depends(get_db)):
+    """批量保存 AI 生成的多篇文章，自动匹配或创建分类和标签"""
+    saved = []
+    for item in data.articles:
+        # 匹配或创建分类
+        category_id = None
+        if item.category:
+            cat = db.query(Category).filter(
+                Category.name == item.category
+            ).first()
+            if not cat:
+                cat = Category(name=item.category)
+                db.add(cat)
+                db.flush()
+            category_id = cat.id
+
+        # 匹配或创建标签
+        tag_objs = []
+        if item.tags:
+            for tag_name in item.tags:
+                tag = db.query(Tag).filter(Tag.name == tag_name).first()
+                if not tag:
+                    colors = ["#f87171", "#fb923c", "#fbbf24", "#34d399",
+                              "#38bdf8", "#818cf8", "#c084fc", "#f472b6"]
+                    import random
+                    tag = Tag(name=tag_name, color=random.choice(colors))
+                    db.add(tag)
+                    db.flush()
+                tag_objs.append(tag)
+
+        rendered = render_markdown(item.content)
+        article = Article(
+            title=item.title,
+            content=item.content,
+            rendered_content=rendered,
+            category_id=category_id,
+        )
+        article.tags = tag_objs
+        db.add(article)
+        db.flush()
+        saved.append({"id": article.id, "title": article.title})
+
+    db.commit()
+    return {"ok": True, "saved": saved}
 
 
 # --- 辅助函数 ---

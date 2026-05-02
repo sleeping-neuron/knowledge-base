@@ -1,19 +1,18 @@
 {% extends "base.html" %}
-{% block title %}AI 写作{% endblock %}
+{% block title %}AI 知识助手{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto px-8 py-8" x-data="aiPage()">
+<div class="max-w-4xl mx-auto px-8 py-8" x-data="aiPage()">
+    <!-- 页面标题 -->
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-2xl font-bold theme-text flex items-center gap-2">
                 <svg class="w-6 h-6 text-[var(--accent)]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/>
                 </svg>
-                <span data-i18n="aiTitle">AI 写作助手</span>
+                <span>AI 知识助手</span>
             </h1>
-            <p class="text-sm theme-text-secondary mt-1" x-text="lang === 'zh' ? '输入话题，AI 自动生成知识笔记' : 'Enter a topic, AI generates a knowledge note'"></p>
         </div>
-        <!-- 设置按钮 -->
         <button @click="window.__kb.showAiSettings = true"
                 class="toolbar-btn" title="AI 设置">
             <svg class="w-[1.1rem] h-[1.1rem]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
@@ -23,75 +22,460 @@
         </button>
     </div>
 
-    <!-- 话题输入区 -->
-    <div class="mb-6">
-        <div class="ai-card rounded-2xl p-1.5 flex items-center gap-2">
-            <textarea x-model="topic" rows="2"
-                      class="flex-1 resize-none bg-transparent border-none outline-none theme-text placeholder:text-[var(--muted)] text-sm p-3"
-                      :placeholder="lang === 'zh' ? '输入你想了解的话题，例如：Python 装饰器原理、Docker 容器化最佳实践...' : 'Enter a topic, e.g.: Python decorators explained, Docker best practices...'"
-                      @keydown.meta.enter="generate()"
-                      @keydown.ctrl.enter="generate()"></textarea>
-            <button @click="generate()" :disabled="generating"
-                    class="shrink-0 self-end mb-1.5 mr-1.5 px-5 py-2 rounded-xl text-sm font-medium text-white
-                           bg-gradient-to-r from-indigo-500 to-violet-500
-                           hover:from-indigo-400 hover:to-violet-400
-                           shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35
-                           transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed
-                           inline-flex items-center gap-1.5">
-                <svg x-show="!generating" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
-                </svg>
-                <svg x-show="generating" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
-                </svg>
-                <span x-text="generating ? t('aiGenerating') : t('aiGenerate')"></span>
-            </button>
-        </div>
-        <p class="text-[11px] theme-muted mt-2 text-right" x-text="lang === 'zh' ? 'Ctrl/Cmd + Enter 快捷发送' : 'Ctrl/Cmd + Enter to send'"></p>
+    <!-- Tab 导航 -->
+    <div class="flex items-center gap-1 mb-6 p-1 rounded-xl ai-card">
+        <button @click="activeTab = 'write'"
+                :class="activeTab === 'write' ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20' : 'text-[var(--muted)] hover:text-[var(--text)]'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/>
+            </svg>
+            AI 写作
+        </button>
+        <button @click="activeTab = 'knowledge'"
+                :class="activeTab === 'knowledge' ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20' : 'text-[var(--muted)] hover:text-[var(--text)]'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/>
+                <circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/>
+                <path stroke-linecap="round" d="M5 7v10m14-10v3m-12 0h10M7 5h10M5 19h10"/>
+            </svg>
+            知识体系完善
+        </button>
+        <button @click="activeTab = 'organize'"
+                :class="activeTab === 'organize' ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20' : 'text-[var(--muted)] hover:text-[var(--text)]'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/>
+            </svg>
+            笔记整理
+        </button>
+        <button @click="activeTab = 'batch'"
+                :class="activeTab === 'batch' ? 'bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/20' : 'text-[var(--muted)] hover:text-[var(--text)]'"
+                class="flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 inline-flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zm0 9.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zm0 9.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/>
+            </svg>
+            批量生成
+        </button>
     </div>
 
     <!-- 错误提示 -->
-    <div x-show="error" class="mb-4 p-4 rounded-xl bg-red-500/8 border border-red-500/15 text-sm text-red-400"
-         x-text="error" @click="error = ''"></div>
+    <div x-show="error" class="mb-4 p-4 rounded-xl bg-red-500/8 border border-red-500/15 text-sm text-red-400
+                cursor-pointer" x-text="error" @click="error = ''"></div>
 
-    <!-- AI 生成结果 -->
-    <div x-show="result">
-        <!-- 元信息预览 -->
-        <div class="flex flex-wrap items-center gap-3 mb-4 text-sm">
-            <span class="theme-label" data-i18n="categoryLabel">分类</span>
-            <span class="px-2.5 py-0.5 rounded-md bg-[var(--accent)]/8 text-[var(--accent)] border border-[var(--accent)]/15 text-xs"
-                  x-text="result.category || (lang === 'zh' ? '未分类' : 'Uncategorized')"></span>
-            <span class="theme-label ml-2" data-i18n="tagLabel">标签</span>
-            <template x-for="t in result.tags" :key="t">
-                <span class="px-2.5 py-0.5 rounded-full text-xs bg-[var(--accent)]/8 text-[var(--accent)] border border-[var(--accent)]/15"
-                      x-text="t"></span>
-            </template>
+    <!-- ═══════════════════════════════════════════
+         Tab 1: AI 写作（保留原有功能）
+         ═══════════════════════════════════════════ -->
+    <div x-show="activeTab === 'write'">
+        <!-- 话题输入区 -->
+        <div class="mb-6">
+            <div class="ai-card rounded-2xl p-1.5 flex items-center gap-2">
+                <textarea x-model="topic" rows="2"
+                          class="flex-1 resize-none bg-transparent border-none outline-none theme-text placeholder:text-[var(--muted)] text-sm p-3"
+                          placeholder="输入你想了解的话题，例如：Python 装饰器原理、Docker 容器化最佳实践..."
+                          @keydown.meta.enter="generateSingle()"
+                          @keydown.ctrl.enter="generateSingle()"></textarea>
+                <button @click="generateSingle()" :disabled="generating"
+                        class="shrink-0 self-end mb-1.5 mr-1.5 px-5 py-2 rounded-xl text-sm font-medium text-white
+                               bg-gradient-to-r from-indigo-500 to-violet-500
+                               hover:from-indigo-400 hover:to-violet-400
+                               shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/35
+                               transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed
+                               inline-flex items-center gap-1.5">
+                    <svg x-show="!generating" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+                    </svg>
+                    <svg x-show="generating" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                    </svg>
+                    <span x-text="generating ? 'AI 正在生成...' : '生成笔记'"></span>
+                </button>
+            </div>
+            <p class="text-[11px] theme-muted mt-2 text-right">Ctrl/Cmd + Enter 快捷发送</p>
         </div>
 
-        <!-- 标题 -->
-        <h2 class="text-xl font-bold theme-text mb-4" x-text="result.title"></h2>
+        <!-- 生成结果 -->
+        <div x-show="result">
+            <div class="flex flex-wrap items-center gap-3 mb-4 text-sm">
+                <span class="theme-label">分类</span>
+                <span class="px-2.5 py-0.5 rounded-md bg-[var(--accent)]/8 text-[var(--accent)] border border-[var(--accent)]/15 text-xs"
+                      x-text="result.category || '未分类'"></span>
+                <span class="theme-label ml-2">标签</span>
+                <template x-for="t in result.tags" :key="t">
+                    <span class="px-2.5 py-0.5 rounded-full text-xs bg-[var(--accent)]/8 text-[var(--accent)] border border-[var(--accent)]/15" x-text="t"></span>
+                </template>
+            </div>
+            <h2 class="text-xl font-bold theme-text mb-4" x-text="result.title"></h2>
+            <div class="ai-card rounded-2xl p-8 mb-4">
+                <div class="markdown-body" x-html="result.rendered"></div>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button @click="result = null; error = ''" class="px-4 py-2 rounded-xl text-sm theme-btn-ghost">取消</button>
+                <button @click="saveToKnowledge(result)" :disabled="saving"
+                        class="px-5 py-2 rounded-xl text-sm font-medium text-white
+                               bg-gradient-to-r from-indigo-500 to-violet-500
+                               hover:from-indigo-400 hover:to-violet-400
+                               shadow-lg shadow-indigo-500/20 transition-all duration-300 disabled:opacity-50
+                               inline-flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                    保存到知识库
+                </button>
+            </div>
+        </div>
+    </div>
 
-        <!-- 内容预览 -->
-        <div class="ai-card rounded-2xl p-8 mb-4">
-            <div class="markdown-body" x-html="result.rendered"></div>
+    <!-- ═══════════════════════════════════════════
+         Tab 2: 知识体系完善
+         ═══════════════════════════════════════════ -->
+    <div x-show="activeTab === 'knowledge'">
+        <!-- Step 1: 选择分类并分析缺口 -->
+        <div class="ai-card rounded-2xl p-6 mb-6">
+            <h3 class="text-base font-semibold theme-text mb-4">选择分类并分析知识缺口</h3>
+            <div class="flex items-center gap-3 flex-wrap">
+                <select x-model="selectedCategoryId"
+                        class="rounded-xl px-3 py-2 text-sm theme-input cursor-pointer min-w-[200px]
+                               bg-[url('data:image/svg+xml;charset=utf-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 fill=%22%2394a3b8%22><path d=%22M4 6l4 4 4-4%22/></svg>')]
+                               bg-[length:16px] bg-[right_8px_center] bg-no-repeat pr-8 appearance-none">
+                    <option value="">请选择分类...</option>
+                    <template x-for="cat in allCategories" :key="cat.id">
+                        <option :value="cat.id" x-text="cat.name + ' (' + cat.article_count + ' 篇)'"></option>
+                    </template>
+                </select>
+                <button @click="analyzeCategory()" :disabled="analyzing || !selectedCategoryId"
+                        class="px-5 py-2 rounded-xl text-sm font-medium text-white
+                               bg-gradient-to-r from-indigo-500 to-violet-500
+                               hover:from-indigo-400 hover:to-violet-400
+                               shadow-lg shadow-indigo-500/20 transition-all duration-300
+                               disabled:opacity-50 disabled:cursor-not-allowed
+                               inline-flex items-center gap-1.5">
+                    <svg x-show="!analyzing" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <svg x-show="analyzing" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                    </svg>
+                    <span x-text="analyzing ? '分析中...' : '分析知识缺口'"></span>
+                </button>
+            </div>
         </div>
 
-        <!-- 保存按钮 -->
-        <div class="flex justify-end gap-3">
-            <button @click="result = null; error = ''"
-                    class="px-4 py-2 rounded-xl text-sm theme-btn-ghost" data-i18n="cancel">取消</button>
-            <button @click="saveToKnowledge()" :disabled="saving"
-                    class="px-5 py-2 rounded-xl text-sm font-medium text-white
-                           bg-gradient-to-r from-indigo-500 to-violet-500
-                           hover:from-indigo-400 hover:to-violet-400
-                           shadow-lg shadow-indigo-500/20
-                           transition-all duration-300 disabled:opacity-50
-                           inline-flex items-center gap-1.5">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                </svg>
-                <span data-i18n="aiSaveAsDraft">保存到知识库</span>
-            </button>
+        <!-- Step 2: 缺口分析结果 -->
+        <div x-show="categoryAnalysis" x-transition class="mb-6">
+            <div class="ai-card rounded-2xl p-6 mb-4">
+                <h3 class="text-base font-semibold theme-text mb-3">分析结果</h3>
+                <p class="text-sm theme-text-secondary leading-relaxed mb-4" x-text="categoryAnalysis.overall_assessment"></p>
+
+                <h4 class="text-sm font-semibold theme-text mb-2" x-show="categoryAnalysis.gaps && categoryAnalysis.gaps.length">
+                    知识缺口 (<span x-text="categoryAnalysis.gaps.length"></span>)
+                </h4>
+                <div class="space-y-2">
+                    <template x-for="(gap, i) in categoryAnalysis.gaps" :key="i">
+                        <div class="p-3 rounded-xl border bg-[var(--bg-input)] flex items-start gap-3"
+                             :class="gap.importance === 'high' ? 'border-red-500/15' : gap.importance === 'medium' ? 'border-amber-500/15' : 'border-slate-500/10'">
+                            <span class="shrink-0 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center text-white mt-0.5"
+                                  :class="gap.importance === 'high' ? 'bg-red-500/70' : gap.importance === 'medium' ? 'bg-amber-500/70' : 'bg-slate-500/50'"
+                                  x-text="gap.importance === 'high' ? '高' : gap.importance === 'medium' ? '中' : '低'"></span>
+                            <div class="min-w-0">
+                                <p class="text-sm font-medium theme-text" x-text="gap.topic"></p>
+                                <p class="text-xs theme-muted mt-0.5" x-text="gap.reason"></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="mt-4 flex justify-end">
+                    <button @click="generatePlan()" :disabled="planning"
+                            class="px-5 py-2 rounded-xl text-sm font-medium text-white
+                                   bg-gradient-to-r from-indigo-500 to-violet-500
+                                   hover:from-indigo-400 hover:to-violet-400
+                                   shadow-lg shadow-indigo-500/20 transition-all duration-300
+                                   disabled:opacity-50 disabled:cursor-not-allowed
+                                   inline-flex items-center gap-1.5">
+                        <svg x-show="!planning" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+                        </svg>
+                        <svg x-show="planning" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                        </svg>
+                        <span x-text="planning ? '规划中...' : '生成完善计划'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: 完善计划 - 待写笔记列表 -->
+        <div x-show="knowledgePlan" x-transition class="mb-6">
+            <div class="ai-card rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-base font-semibold theme-text" x-text="knowledgePlan.plan_title"></h3>
+                        <p class="text-xs theme-muted mt-0.5">
+                            <span x-text="'共 ' + (knowledgePlan.articles ? knowledgePlan.articles.length : 0) + ' 篇待写笔记'"></span>
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button @click="toggleSelectAllPlan()" class="text-xs theme-muted hover:text-[var(--accent)] transition-colors">
+                            <span x-text="planAllSelected ? '取消全选' : '全选'"></span>
+                        </button>
+                        <button @click="batchGeneratePlan()" :disabled="batchGenerating || selectedPlanIds.length === 0"
+                                class="px-4 py-1.5 rounded-lg text-xs font-medium text-white
+                                       bg-gradient-to-r from-indigo-500 to-violet-500
+                                       hover:from-indigo-400 hover:to-violet-400
+                                       shadow-lg shadow-indigo-500/20 transition-all duration-300
+                                       disabled:opacity-50 disabled:cursor-not-allowed
+                                       inline-flex items-center gap-1">
+                            <svg x-show="!batchGenerating" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 4v16h18"/>
+                            </svg>
+                            <svg x-show="batchGenerating" class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                            </svg>
+                            <span x-text="batchGenerating ? ('生成中 ' + batchProgress + '/' + selectedPlanIds.length) : '批量生成并保存'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <template x-for="(article, i) in knowledgePlan.articles" :key="i">
+                        <div class="p-4 rounded-xl border bg-[var(--bg-input)] flex items-start gap-3"
+                             :class="selectedPlanIds.includes(i) ? 'border-indigo-500/30 bg-indigo-500/[0.04]' : 'border-transparent'">
+                            <input type="checkbox" :checked="selectedPlanIds.includes(i)"
+                                   @change="togglePlanSelect(i)"
+                                   class="w-4 h-4 rounded accent-indigo-500 mt-0.5 shrink-0 cursor-pointer">
+                            <div class="min-w-0 flex-1">
+                                <p class="text-sm font-semibold theme-text" x-text="article.title"></p>
+                                <p class="text-xs theme-text-secondary mt-1" x-text="article.description"></p>
+                                <div class="flex flex-wrap gap-1 mt-2" x-show="article.key_points && article.key_points.length">
+                                    <template x-for="kp in article.key_points" :key="kp">
+                                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)]/6 text-[var(--accent)]" x-text="kp"></span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         Tab 3: 笔记整理
+         ═══════════════════════════════════════════ -->
+    <div x-show="activeTab === 'organize'">
+        <!-- 笔记选择区 -->
+        <div class="ai-card rounded-2xl p-6 mb-6">
+            <h3 class="text-base font-semibold theme-text mb-4">选择要整理的笔记</h3>
+
+            <div class="flex items-center gap-3 mb-3">
+                <div class="flex-1 relative">
+                    <input type="text" x-model="noteSearch" @input="searchNotes()"
+                           placeholder="搜索笔记..."
+                           class="w-full pl-9 pr-3 py-2 rounded-xl text-sm theme-input">
+                    <svg class="w-4 h-4 absolute left-3 top-2.5 text-[var(--muted)]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+                    </svg>
+                </div>
+                <button @click="clearOrganizeSelection()"
+                        class="text-xs theme-muted hover:theme-text transition-colors">清除选择</button>
+            </div>
+
+            <!-- 已选笔记标签 -->
+            <div class="flex flex-wrap gap-1.5 mb-3" x-show="selectedOrganizeIds.length">
+                <template x-for="nid in selectedOrganizeIds" :key="nid">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/15"
+                          x-text="organizeNotesList.find(n => n.id === nid)?.title || '#'+nid"></span>
+                </template>
+            </div>
+
+            <!-- 搜索结果列表 -->
+            <div x-show="noteSearchResults.length" class="max-h-48 overflow-y-auto rounded-xl border space-y-0.5 p-1" style="border-color: var(--border)">
+                <template x-for="n in noteSearchResults" :key="n.id">
+                    <button @click="toggleOrganizeNote(n)" type="button"
+                            class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors duration-150 flex items-center justify-between"
+                            :class="selectedOrganizeIds.includes(n.id) ? 'bg-[var(--accent)]/8 text-[var(--accent)]' : 'hover:bg-[var(--bg-input)] theme-text-secondary'">
+                        <span x-text="n.title"></span>
+                        <span class="text-[10px] text-[var(--muted)]" x-text="n.category || ''"></span>
+                    </button>
+                </template>
+            </div>
+
+            <!-- 整理指令 -->
+            <div class="mt-4">
+                <label class="block text-xs theme-label mb-1.5">整理指令（可选）</label>
+                <textarea x-model="organizeInstruction" rows="2"
+                          class="w-full resize-none rounded-xl px-3 py-2 text-sm theme-input"
+                          placeholder="例如：合并重复内容、统一术语、按难度排序..."></textarea>
+            </div>
+
+            <div class="mt-4 flex justify-end">
+                <button @click="startOrganize()" :disabled="organizing || selectedOrganizeIds.length < 2"
+                        class="px-5 py-2 rounded-xl text-sm font-medium text-white
+                               bg-gradient-to-r from-indigo-500 to-violet-500
+                               hover:from-indigo-400 hover:to-violet-400
+                               shadow-lg shadow-indigo-500/20 transition-all duration-300
+                               disabled:opacity-50 disabled:cursor-not-allowed
+                               inline-flex items-center gap-1.5">
+                    <svg x-show="!organizing" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/>
+                    </svg>
+                    <svg x-show="organizing" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                    </svg>
+                    <span x-text="organizing ? '整理中...' : '开始整理'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 整理结果 -->
+        <div x-show="organizeResult" x-transition class="mb-6">
+            <div class="ai-card rounded-2xl p-6 mb-4">
+                <h3 class="text-base font-semibold theme-text mb-3">整理分析</h3>
+                <p class="text-sm theme-text-secondary leading-relaxed" x-text="organizeResult.analysis"></p>
+            </div>
+
+            <h3 class="text-sm font-semibold theme-label mb-3 uppercase tracking-wider">AI 建议操作</h3>
+            <div class="space-y-3">
+                <template x-for="(action, i) in organizeResult.actions" :key="i">
+                    <div class="ai-card rounded-2xl p-5 border"
+                         :class="action.action === 'merge' ? 'border-indigo-500/20' :
+                                 action.action === 'update' ? 'border-amber-500/15' :
+                                 action.action === 'delete' ? 'border-red-500/15' : 'border-emerald-500/15'">
+                        <div class="flex items-start justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
+                                      :class="action.action === 'merge' ? 'bg-indigo-500/10 text-indigo-400' :
+                                              action.action === 'update' ? 'bg-amber-500/10 text-amber-400' :
+                                              action.action === 'delete' ? 'bg-red-500/10 text-red-400' :
+                                              'bg-emerald-500/10 text-emerald-400'"
+                                      x-text="action.action === 'merge' ? '合并' : action.action === 'update' ? '更新' : action.action === 'delete' ? '删除' : '保留'"></span>
+                                <span class="text-sm font-medium theme-text" x-text="action.title"></span>
+                            </div>
+                        </div>
+                        <p class="text-xs theme-text-secondary mb-3" x-text="action.reason"></p>
+                        <div x-show="action.suggested_content" class="bg-[var(--bg-input)] rounded-xl p-4 text-sm theme-text-secondary max-h-60 overflow-y-auto whitespace-pre-wrap font-mono text-xs"
+                             x-text="action.suggested_content?.slice(0, 2000) + (action.suggested_content?.length > 2000 ? '\n... (内容过长，已截断)' : '')"></div>
+                        <div class="mt-3 flex justify-end gap-2" x-show="action.action === 'merge' || action.action === 'update'">
+                            <button @click="saveOrganizeAction(action)"
+                                    class="px-3 py-1.5 rounded-lg text-xs font-medium text-white
+                                           bg-gradient-to-r from-indigo-500 to-violet-500
+                                           hover:from-indigo-400 hover:to-violet-400
+                                           transition-all duration-200 inline-flex items-center gap-1">
+                                <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                采纳并保存
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         Tab 4: 批量生成
+         ═══════════════════════════════════════════ -->
+    <div x-show="activeTab === 'batch'">
+        <!-- Step 1: 输入大主题并拆解 -->
+        <div class="ai-card rounded-2xl p-6 mb-6">
+            <h3 class="text-base font-semibold theme-text mb-4">输入大主题，AI 自动拆解为子主题</h3>
+            <div class="flex items-center gap-3 mb-3">
+                <input type="text" x-model="batchTopic"
+                       class="flex-1 rounded-xl px-3 py-2 text-sm theme-input"
+                       placeholder="例如：Python 面向对象编程、Kubernetes 入门到实践..."
+                       @keydown.enter="expandTopic()">
+                <select x-model="batchCount" class="rounded-xl px-3 py-2 text-sm theme-input cursor-pointer appearance-none
+                       bg-[url('data:image/svg+xml;charset=utf-8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 fill=%22%2394a3b8%22><path d=%22M4 6l4 4 4-4%22/></svg>')]
+                       bg-[length:14px] bg-[right_6px_center] bg-no-repeat pr-7">
+                    <option value="3">3 篇</option>
+                    <option value="5" selected>5 篇</option>
+                    <option value="7">7 篇</option>
+                    <option value="10">10 篇</option>
+                </select>
+                <button @click="expandTopic()" :disabled="expanding || !batchTopic.trim()"
+                        class="px-5 py-2 rounded-xl text-sm font-medium text-white
+                               bg-gradient-to-r from-indigo-500 to-violet-500
+                               hover:from-indigo-400 hover:to-violet-400
+                               shadow-lg shadow-indigo-500/20 transition-all duration-300
+                               disabled:opacity-50 disabled:cursor-not-allowed
+                               inline-flex items-center gap-1.5">
+                    <svg x-show="!expanding" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6z"/>
+                    </svg>
+                    <svg x-show="expanding" class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                    </svg>
+                    <span x-text="expanding ? '拆解中...' : '拆解主题'"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 2: 子主题列表 -->
+        <div x-show="subTopics.length" x-transition class="mb-6">
+            <div class="ai-card rounded-2xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-base font-semibold theme-text" x-text="batchMainTopic || '子主题列表'"></h3>
+                    <div class="flex items-center gap-2">
+                        <button @click="toggleSelectAllSub()" class="text-xs theme-muted hover:text-[var(--accent)] transition-colors">
+                            <span x-text="subAllSelected ? '取消全选' : '全选'"></span>
+                        </button>
+                        <button @click="batchGenerateSub()" :disabled="batchGening || selectedSubIds.length === 0"
+                                class="px-4 py-1.5 rounded-lg text-xs font-medium text-white
+                                       bg-gradient-to-r from-indigo-500 to-violet-500
+                                       hover:from-indigo-400 hover:to-violet-400
+                                       shadow-lg shadow-indigo-500/20 transition-all duration-300
+                                       disabled:opacity-50 disabled:cursor-not-allowed
+                                       inline-flex items-center gap-1">
+                            <svg x-show="!batchGening" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 4v16h18"/>
+                            </svg>
+                            <svg x-show="batchGening" class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10"/><path class="opacity-75" d="M4 12a8 8 0 018-8"/>
+                            </svg>
+                            <span x-text="batchGening ? ('生成中 ' + subProgress + '/' + selectedSubIds.length) : '批量生成并保存'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <template x-for="(sub, i) in subTopics" :key="i">
+                        <div class="p-3 rounded-xl border bg-[var(--bg-input)] flex items-start gap-3"
+                             :class="selectedSubIds.includes(i) ? 'border-indigo-500/30 bg-indigo-500/[0.04]' : 'border-transparent'">
+                            <input type="checkbox" :checked="selectedSubIds.includes(i)"
+                                   @change="toggleSubSelect(i)"
+                                   class="w-4 h-4 rounded accent-indigo-500 mt-0.5 shrink-0 cursor-pointer">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2">
+                                    <p class="text-sm font-medium theme-text" x-text="sub.title"
+                                       :contenteditable="true" @blur="sub.title = $event.target.textContent.trim()"></p>
+                                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-[var(--accent)]/8 text-[var(--accent)]"
+                                          x-text="sub.category" x-show="sub.category"></span>
+                                </div>
+                                <p class="text-xs theme-muted mt-0.5" x-text="sub.description"
+                                   :contenteditable="true" @blur="sub.description = $event.target.textContent.trim()"></p>
+                            </div>
+                            <button @click="subTopics.splice(i, 1); selectedSubIds = selectedSubIds.filter(x => x !== i).map(x => x > i ? x - 1 : x)"
+                                    class="text-[var(--muted)] hover:text-red-400 transition-colors shrink-0">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- 手动添加子主题 -->
+                <div class="mt-3 flex gap-2">
+                    <input type="text" x-model="newSubTopic" @keydown.enter="addSubTopic()"
+                           class="flex-1 rounded-lg px-3 py-1.5 text-xs theme-input"
+                           placeholder="手动添加子主题，回车确认...">
+                    <button @click="addSubTopic()"
+                            class="px-3 py-1.5 rounded-lg text-xs theme-btn-ghost hover:text-[var(--accent)]">添加</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -99,35 +483,77 @@
 <script>
 function aiPage() {
     return {
+        activeTab: 'write',
+        lang: 'zh',
+        error: '',
+
+        // ===== Tab 1: AI 写作 =====
         topic: '',
         generating: false,
         saving: false,
-        error: '',
         result: null,
-        lang: 'zh',
+
+        // ===== Tab 2: 知识体系完善 =====
+        allCategories: [],
+        selectedCategoryId: '',
+        analyzing: false,
+        categoryAnalysis: null,
+        planning: false,
+        knowledgePlan: null,
+        selectedPlanIds: [],
+        batchGenerating: false,
+        batchProgress: 0,
+
+        // ===== Tab 3: 笔记整理 =====
+        noteSearch: '',
+        noteSearchResults: [],
+        selectedOrganizeIds: [],
+        organizeInstruction: '',
+        organizing: false,
+        organizeResult: null,
+        organizeNotesList: [],
+
+        // ===== Tab 4: 批量生成 =====
+        batchTopic: '',
+        batchCount: 5,
+        expanding: false,
+        batchMainTopic: '',
+        subTopics: [],
+        selectedSubIds: [],
+        batchGening: false,
+        subProgress: 0,
+        newSubTopic: '',
 
         init() {
             this.lang = localStorage.getItem('kb-lang') || 'zh';
-            this.loadConfig();
+
+            // 从 base.html 全局获取分类数据
+            this.allCategories = window.__kb?.allCategories || [];
+
+            // 读取 URL 参数
             const params = new URLSearchParams(window.location.search);
-            const t = params.get('topic');
-            if (t) {
-                this.topic = t;
-                this.$nextTick(() => this.generate());
+            const tab = params.get('tab');
+            if (tab) this.activeTab = tab;
+
+            const topic = params.get('topic');
+            if (topic) {
+                this.topic = topic;
+                if (!tab) this.activeTab = 'write';
+                this.$nextTick(() => this.generateSingle());
+            }
+
+            const ids = params.get('ids');
+            if (ids) {
+                this.selectedOrganizeIds = ids.split(',').map(Number).filter(n => n > 0);
+                this.activeTab = tab || 'organize';
+                this.loadOrganizeNotes();
             }
         },
 
-        async loadConfig() {
-            try {
-                const resp = await fetch('/api/config');
-                const cfg = await resp.json();
-                this.lang = cfg.language || 'zh';
-            } catch(e) {}
-        },
-
-        async generate() {
+        // ===== Tab 1: 单篇生成 =====
+        async generateSingle() {
             if (!this.topic.trim()) {
-                window.__kb.showToast(t(this.lang === 'zh' ? '请输入话题' : 'enterTopic'), 'error');
+                window.__kb.showToast('请输入话题', 'error');
                 return;
             }
             this.generating = true;
@@ -139,90 +565,366 @@ function aiPage() {
                     body: JSON.stringify({topic: this.topic, lang: this.lang}),
                 });
                 const data = await resp.json();
-                if (data.error) {
-                    this.error = data.error;
-                } else {
-                    // Render markdown
-                    const pr = await fetch('/api/preview', {
-                        method: 'POST', headers: {'Content-Type': 'application/json'},
-                        body: JSON.stringify({content: data.content}),
-                    });
-                    const prData = await pr.json();
-                    this.result = { ...data, rendered: prData.html };
-                }
+                if (data.error) { this.error = data.error; return; }
+                const pr = await fetch('/api/preview', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({content: data.content}),
+                });
+                const prData = await pr.json();
+                this.result = { ...data, rendered: prData.html };
             } catch {
-                this.error = this.lang === 'zh' ? '网络请求失败' : 'Network error';
+                this.error = '网络请求失败';
             } finally {
                 this.generating = false;
             }
         },
 
-        async saveToKnowledge() {
-            if (!this.result) return;
+        async saveToKnowledge(item) {
+            if (!item) return;
             this.saving = true;
             try {
-                // 创建或匹配分类
                 let categoryId = null;
-                if (this.result.category) {
+                if (item.category) {
                     const catsResp = await fetch('/api/categories');
                     const cats = await catsResp.json();
-                    let cat = cats.find(c => c.name.toLowerCase() === this.result.category.toLowerCase());
+                    let cat = cats.find(c => c.name.toLowerCase() === item.category.toLowerCase());
                     if (!cat) {
                         const newResp = await fetch('/api/category', {
                             method: 'POST', headers: {'Content-Type': 'application/json'},
-                            body: JSON.stringify({name: this.result.category}),
+                            body: JSON.stringify({name: item.category}),
                         });
                         cat = await newResp.json();
                     }
                     categoryId = cat.id;
                 }
 
-                // 创建或匹配标签
                 const tagIds = [];
-                if (this.result.tags && this.result.tags.length > 0) {
+                if (item.tags && item.tags.length > 0) {
                     const tagsResp = await fetch('/api/tags');
                     const existingTags = await tagsResp.json();
-                    for (const tagName of this.result.tags) {
+                    for (const tagName of item.tags) {
                         let tag = existingTags.find(t => t.name.toLowerCase() === tagName.toLowerCase());
                         if (!tag) {
                             const colors = ['#f87171','#fb923c','#fbbf24','#34d399','#38bdf8','#818cf8','#c084fc','#f472b6'];
-                            const color = colors[Math.floor(Math.random() * colors.length)];
-                            const newResp = await fetch('/api/tag', {
+                            const resp = await fetch('/api/tag', {
                                 method: 'POST', headers: {'Content-Type': 'application/json'},
-                                body: JSON.stringify({name: tagName, color}),
+                                body: JSON.stringify({name: tagName, color: colors[Math.floor(Math.random() * colors.length)]}),
                             });
-                            tag = await newResp.json();
+                            tag = await resp.json();
                         }
                         tagIds.push(tag.id);
                     }
                 }
 
-                // 创建文章
                 const resp = await fetch('/api/article', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        title: this.result.title,
-                        content: this.result.content,
-                        category_id: categoryId,
-                        tag_ids: tagIds,
+                        title: item.title, content: item.content,
+                        category_id: categoryId, tag_ids: tagIds,
                     }),
                 });
                 const article = await resp.json();
                 window.location.href = '/article/' + article.id;
             } catch {
-                window.__kb.showToast(this.lang === 'zh' ? '保存失败' : 'Save failed', 'error');
+                window.__kb.showToast('保存失败', 'error');
             } finally {
                 this.saving = false;
             }
         },
 
-        t(key) {
-            const lang = localStorage.getItem('kb-lang') || 'zh';
-            const I18N = {
-                zh: { enterTopic: '请输入话题', aiGenerating: 'AI 正在生成...', aiGenerate: '生成笔记' },
-                en: { enterTopic: 'Please enter a topic', aiGenerating: 'AI is writing...', aiGenerate: 'Generate Note' },
-            };
-            return (I18N[lang] || I18N.zh)[key] || key;
+        // ===== Tab 2: 知识体系完善 =====
+        async analyzeCategory() {
+            if (!this.selectedCategoryId) return;
+            this.analyzing = true;
+            this.error = '';
+            this.categoryAnalysis = null;
+            this.knowledgePlan = null;
+            this.selectedPlanIds = [];
+            try {
+                const resp = await fetch('/api/ai/analyze-category', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({category_id: parseInt(this.selectedCategoryId), lang: this.lang}),
+                });
+                const data = await resp.json();
+                if (data.error) { this.error = data.error; return; }
+                this.categoryAnalysis = data;
+            } catch {
+                this.error = '网络请求失败';
+            } finally {
+                this.analyzing = false;
+            }
+        },
+
+        async generatePlan() {
+            if (!this.categoryAnalysis?.gaps?.length) return;
+            this.planning = true;
+            this.error = '';
+            this.knowledgePlan = null;
+            try {
+                const resp = await fetch('/api/ai/knowledge-plan', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        category_id: parseInt(this.selectedCategoryId),
+                        gaps: this.categoryAnalysis.gaps,
+                        lang: this.lang,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.error) { this.error = data.error; return; }
+                this.knowledgePlan = data;
+                this.selectedPlanIds = data.articles ? data.articles.map((_, i) => i) : [];
+            } catch {
+                this.error = '网络请求失败';
+            } finally {
+                this.planning = false;
+            }
+        },
+
+        togglePlanSelect(i) {
+            const idx = this.selectedPlanIds.indexOf(i);
+            idx >= 0 ? this.selectedPlanIds.splice(idx, 1) : this.selectedPlanIds.push(i);
+        },
+
+        toggleSelectAllPlan() {
+            if (this.planAllSelected) {
+                this.selectedPlanIds = [];
+            } else {
+                this.selectedPlanIds = (this.knowledgePlan?.articles || []).map((_, i) => i);
+            }
+        },
+
+        get planAllSelected() {
+            const articles = this.knowledgePlan?.articles || [];
+            return articles.length > 0 && this.selectedPlanIds.length === articles.length;
+        },
+
+        async batchGeneratePlan() {
+            const articles = (this.knowledgePlan?.articles || []).filter((_, i) => this.selectedPlanIds.includes(i));
+            if (!articles.length) return;
+            this.batchGenerating = true;
+            this.batchProgress = 0;
+
+            const items = [];
+            for (let i = 0; i < articles.length; i++) {
+                const a = articles[i];
+                try {
+                    const resp = await fetch('/api/ai/generate', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({
+                            topic: a.title + ' - ' + a.description + ' - ' + (a.key_points || []).join(', '),
+                            lang: this.lang,
+                        }),
+                    });
+                    const data = await resp.json();
+                    if (!data.error) {
+                        const catName = window.__kb?.allCategories?.find(
+                            c => c.id === parseInt(this.selectedCategoryId)
+                        )?.name || '';
+                        items.push({
+                            title: data.title || a.title,
+                            content: data.content,
+                            category: catName,
+                            tags: data.tags || [],
+                        });
+                    }
+                } catch {}
+                this.batchProgress = i + 1;
+            }
+
+            // 批量保存
+            if (items.length > 0) {
+                try {
+                    await fetch('/api/ai/batch-save', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({articles: items}),
+                    });
+                    window.__kb.showToast('已生成并保存 ' + items.length + ' 篇笔记', 'info', 3000);
+                    this.knowledgePlan = null;
+                    this.selectedPlanIds = [];
+                    // 刷新侧边栏数据
+                    setTimeout(() => window.location.reload(), 800);
+                } catch {
+                    window.__kb.showToast('保存失败', 'error');
+                }
+            }
+            this.batchGenerating = false;
+        },
+
+        // ===== Tab 3: 笔记整理 =====
+        async searchNotes() {
+            const q = this.noteSearch.trim();
+            if (!q) {
+                this.noteSearchResults = [];
+                return;
+            }
+            try {
+                const resp = await fetch('/api/articles?q=' + encodeURIComponent(q) + '&limit=15');
+                const data = await resp.json();
+                this.noteSearchResults = data || [];
+                // 缓存所有已加载的笔记信息
+                for (const n of data) {
+                    if (!this.organizeNotesList.find(x => x.id === n.id)) {
+                        this.organizeNotesList.push(n);
+                    }
+                }
+            } catch {}
+        },
+
+        async loadOrganizeNotes() {
+            if (!this.selectedOrganizeIds.length) return;
+            try {
+                const resp = await fetch('/api/articles?limit=200');
+                const data = await resp.json();
+                this.organizeNotesList = data || [];
+            } catch {}
+        },
+
+        toggleOrganizeNote(n) {
+            const idx = this.selectedOrganizeIds.indexOf(n.id);
+            idx >= 0 ? this.selectedOrganizeIds.splice(idx, 1) : this.selectedOrganizeIds.push(n.id);
+        },
+
+        clearOrganizeSelection() {
+            this.selectedOrganizeIds = [];
+            this.organizeResult = null;
+        },
+
+        async startOrganize() {
+            if (this.selectedOrganizeIds.length < 2) {
+                window.__kb.showToast('请至少选择 2 篇笔记', 'error');
+                return;
+            }
+            this.organizing = true;
+            this.error = '';
+            this.organizeResult = null;
+            try {
+                const resp = await fetch('/api/ai/organize', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        article_ids: this.selectedOrganizeIds,
+                        instruction: this.organizeInstruction,
+                        lang: this.lang,
+                    }),
+                });
+                const data = await resp.json();
+                if (data.error) { this.error = data.error; return; }
+                this.organizeResult = data;
+            } catch {
+                this.error = '网络请求失败';
+            } finally {
+                this.organizing = false;
+            }
+        },
+
+        async saveOrganizeAction(action) {
+            if (!action.suggested_content) return;
+            try {
+                await this.saveToKnowledge({
+                    title: action.title,
+                    content: action.suggested_content,
+                    category: '',
+                    tags: [],
+                });
+                window.__kb.showToast('已保存', 'info');
+            } catch {
+                window.__kb.showToast('保存失败', 'error');
+            }
+        },
+
+        // ===== Tab 4: 批量生成 =====
+        async expandTopic() {
+            if (!this.batchTopic.trim()) return;
+            this.expanding = true;
+            this.error = '';
+            this.subTopics = [];
+            this.selectedSubIds = [];
+            try {
+                const resp = await fetch('/api/ai/expand-topic', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({topic: this.batchTopic, count: this.batchCount, lang: this.lang}),
+                });
+                const data = await resp.json();
+                if (data.error) { this.error = data.error; return; }
+                this.batchMainTopic = data.main_topic || this.batchTopic;
+                this.subTopics = data.sub_topics || [];
+                this.selectedSubIds = this.subTopics.map((_, i) => i);
+            } catch {
+                this.error = '网络请求失败';
+            } finally {
+                this.expanding = false;
+            }
+        },
+
+        toggleSubSelect(i) {
+            const idx = this.selectedSubIds.indexOf(i);
+            idx >= 0 ? this.selectedSubIds.splice(idx, 1) : this.selectedSubIds.push(i);
+        },
+
+        toggleSelectAllSub() {
+            if (this.subAllSelected) {
+                this.selectedSubIds = [];
+            } else {
+                this.selectedSubIds = this.subTopics.map((_, i) => i);
+            }
+        },
+
+        get subAllSelected() {
+            return this.subTopics.length > 0 && this.selectedSubIds.length === this.subTopics.length;
+        },
+
+        addSubTopic() {
+            if (!this.newSubTopic.trim()) return;
+            this.subTopics.push({title: this.newSubTopic.trim(), description: '', category: ''});
+            this.selectedSubIds.push(this.subTopics.length - 1);
+            this.newSubTopic = '';
+        },
+
+        async batchGenerateSub() {
+            const subs = this.subTopics.filter((_, i) => this.selectedSubIds.includes(i));
+            if (!subs.length) return;
+            this.batchGening = true;
+            this.subProgress = 0;
+
+            const items = [];
+            for (let i = 0; i < subs.length; i++) {
+                const sub = subs[i];
+                try {
+                    const fullTopic = sub.category
+                        ? sub.category + ' - ' + sub.title + (sub.description ? ' (' + sub.description + ')' : '')
+                        : sub.title + (sub.description ? ' (' + sub.description + ')' : '');
+                    const resp = await fetch('/api/ai/generate', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({topic: fullTopic, lang: this.lang}),
+                    });
+                    const data = await resp.json();
+                    if (!data.error) {
+                        items.push({
+                            title: data.title || sub.title,
+                            content: data.content,
+                            category: data.category || sub.category || '',
+                            tags: data.tags || [],
+                        });
+                    }
+                } catch {}
+                this.subProgress = i + 1;
+            }
+
+            if (items.length > 0) {
+                try {
+                    const saveResp = await fetch('/api/ai/batch-save', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({articles: items}),
+                    });
+                    const saveData = await saveResp.json();
+                    window.__kb.showToast('已生成并保存 ' + saveData.saved.length + ' 篇笔记', 'info', 3000);
+                    this.subTopics = [];
+                    this.selectedSubIds = [];
+                    setTimeout(() => window.location.reload(), 800);
+                } catch {
+                    window.__kb.showToast('保存失败', 'error');
+                }
+            }
+            this.batchGening = false;
         },
     };
 }

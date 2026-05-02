@@ -7,6 +7,20 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
     <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+            },
+            options: {
+                ignoreHtmlClass: 'no-math',
+                processHtmlClass: 'markdown-body',
+            },
+        };
+    </script>
+    <script id="MathJax-script" defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+    <script>
         // 立即加载主题，避免闪白
         (function(){
             const t = localStorage.getItem('kb-theme') || 'dark';
@@ -40,12 +54,12 @@
 
             <!-- 工具栏按钮 -->
             <div class="flex items-center gap-1">
-                <!-- AI 写作 -->
-                <a href="/ai" class="toolbar-btn group" title="AI 写作">
+                <!-- AI -->
+                <a href="/ai" class="toolbar-btn group" title="AI">
                     <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/>
                     </svg>
-                    <span class="hidden sm:inline text-xs font-medium" data-i18n="aiWrite">AI 写作</span>
+                    <span class="hidden sm:inline text-xs font-medium">AI</span>
                 </a>
 
                 <!-- AI 设置 -->
@@ -274,10 +288,17 @@
             <div class="space-y-4">
                 <!-- API Key -->
                 <div>
-                    <label class="block text-xs theme-label mb-1.5">DeepSeek API Key</label>
+                    <label class="flex items-center gap-2 text-xs theme-label mb-1.5">
+                        DeepSeek API Key
+                        <span x-show="aiConfig.hasKey && !aiConfig.apiKey"
+                              class="inline-flex items-center gap-1 text-emerald-400">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                            已配置
+                        </span>
+                    </label>
                     <input x-model="aiConfig.apiKey" type="password"
                            class="w-full px-3 py-2 rounded-xl text-sm theme-input font-mono"
-                           placeholder="sk-...">
+                           :placeholder="aiConfig.hasKey ? '已配置，输入新 Key 可覆盖...' : 'sk-...'">
                 </div>
 
                 <!-- 默认模型 -->
@@ -301,7 +322,11 @@
                             summarize: '摘要生成',
                             polish: '内容润色',
                             tags: '标签建议',
-                            related: '相关话题'
+                            related: '相关话题',
+                            analyze: '知识分析',
+                            plan: '体系规划',
+                            organize: '笔记整理',
+                            expand: '主题拆解'
                         }" :key="key">
                             <div>
                                 <label class="block text-[11px] theme-label mb-1" x-text="label"></label>
@@ -335,7 +360,7 @@
     // ====== i18n ======
     const I18N = {
         zh: {
-            appName: '知识库', newNote: '新建笔记', aiWrite: 'AI 写作',
+            appName: '知识库', newNote: '新建笔记', aiWrite: 'AI',
             categories: '分类', tags: '标签', allNotes: '全部笔记', noTags: '暂无标签', noCategories: '暂无分类',
             search: '搜索...', searchTitle: '搜索', results: '条结果',
             notes: '篇笔记', allNotesTitle: '所有笔记',
@@ -362,7 +387,7 @@
             enterTopic: '请输入话题',
         },
         en: {
-            appName: 'Knowledge Base', newNote: 'New Note', aiWrite: 'AI Write',
+            appName: 'Knowledge Base', newNote: 'New Note', aiWrite: 'AI',
             categories: 'Categories', tags: 'Tags', allNotes: 'All Notes', noTags: 'No tags yet', noCategories: 'No categories yet',
             search: 'Search...', searchTitle: 'Search', results: 'results',
             notes: 'notes', allNotesTitle: 'All Notes',
@@ -459,7 +484,7 @@
             currentTag: {{ current_tag | tojson }},
 
             showAiSettings: false,
-            aiConfig: { apiKey: '', model: 'deepseek-v4-flash', models: {} },
+            aiConfig: { apiKey: '', model: 'deepseek-v4-flash', models: {}, hasKey: false },
 
             init() {
                 window.__kb = this;  // 全局桥接，供子组件跨层级调用
@@ -479,6 +504,7 @@
                     const cfg = await resp.json();
                     this.aiConfig.model = cfg.model || 'deepseek-v4-flash';
                     this.aiConfig.models = cfg.models || {};
+                    this.aiConfig.hasKey = cfg.has_api_key;
                 } catch(e) {}
             },
 
@@ -492,6 +518,10 @@
                             models: this.aiConfig.models,
                         }),
                     });
+                    if (this.aiConfig.apiKey.trim()) {
+                        this.aiConfig.hasKey = true;
+                        this.aiConfig.apiKey = '';
+                    }
                     this.showAiSettings = false;
                     this.showToast(
                         this.lang === 'zh' ? 'AI 配置已保存' : 'AI config saved',

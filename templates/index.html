@@ -144,6 +144,13 @@
                 class="px-3 py-1.5 rounded-lg text-xs font-medium text-red-400/70 hover:text-red-400 hover:bg-red-500/6 transition-all duration-200">
             <span x-text="lang === 'zh' ? '批量删除' : 'Delete all'"></span>
         </button>
+        <button @click="aiOrganize()"
+                class="px-3 py-1.5 rounded-lg text-xs font-medium text-indigo-400/70 hover:text-indigo-400 hover:bg-indigo-500/6 transition-all duration-200 inline-flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
+            </svg>
+            <span>AI 整理</span>
+        </button>
         <div class="w-px h-5" style="background: var(--border)"></div>
         <button @click="selectedIds = []"
                 class="px-3 py-1.5 rounded-lg text-xs font-medium theme-muted hover:theme-text transition-all duration-200">
@@ -224,6 +231,11 @@ function listPage() {
                 body: JSON.stringify({ids: this.selectedIds, tag_ids: [tag.id]}),
             });
             window.location.reload();
+        },
+
+        aiOrganize() {
+            const ids = this.selectedIds.join(',');
+            window.location.href = '/ai?tab=organize&ids=' + ids;
         },
 
         async batchCategory() {

@@ -10,7 +10,7 @@
                 <span class="w-3 h-3 rounded-full bg-[var(--accent)]"></span> 节点=笔记
             </span>
             <span class="flex items-center gap-1">
-                <span class="w-[12px] h-[1.5px] bg-[var(--muted)] inline-block"></span> 连线=关联
+                <span class="w-[12px] h-[1.5px] bg-slate-400 dark:bg-slate-300 inline-block"></span> 连线=关联
             </span>
         </div>
     </div>
@@ -70,14 +70,17 @@ function graphPage() {
                 .force('center', d3.forceCenter(0, 0))
                 .force('collision', d3.forceCollide().radius(d => d.size + 5));
 
-            // 连线
+            // 连线 — 深色模式亮色连线，浅色模式深色连线
+            const isDark = (localStorage.getItem('kb-theme') || 'dark') === 'dark';
+            const edgeColor = isDark ? '#94a3b8' : '#475569';
+            const edgeColorStrong = isDark ? '#e2e8f0' : '#1e293b';
             const link = g.append('g')
                 .selectAll('line')
                 .data(data.edges)
                 .join('line')
-                .attr('stroke', 'var(--muted)')
-                .attr('stroke-opacity', d => 0.08 + d.weight * 0.06)
-                .attr('stroke-width', d => 0.5 + d.weight * 0.5);
+                .attr('stroke', d => d.weight >= 2 ? edgeColorStrong : edgeColor)
+                .attr('stroke-opacity', d => Math.min(1, 0.55 + d.weight * 0.15))
+                .attr('stroke-width', d => 0.8 + d.weight * 0.6);
 
             // 节点组
             const node = g.append('g')

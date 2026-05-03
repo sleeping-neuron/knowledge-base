@@ -55,7 +55,7 @@
     --bg-input: rgba(0,0,0,0.04);
     --text: rgba(0,0,0,0.85);
     --text-secondary: rgba(0,0,0,0.55);
-    --muted: rgba(0,0,0,0.3);
+    --muted: rgba(0,0,0,0.45);
     --border: rgba(0,0,0,0.08);
     --border-hover: rgba(0,0,0,0.14);
     --accent: #6366f1;
@@ -346,3 +346,19 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline: non
 [data-theme="light"] .highlight .nt { color: #e11d48 }
 [data-theme="light"] .highlight .m { color: #d97706 }
 [data-theme="light"] .highlight .o { color: #e11d48 }
+
+/* KaTeX 公式颜色适配 */
+[data-theme="dark"] .katex { color: #e2e8f0; }
+[data-theme="dark"] .katex .mord { color: #e2e8f0; }
+[data-theme="light"] .katex { color: #1e293b; }
+[data-theme="light"] .katex .mord { color: #1e293b; }
+
+/* 编辑页选中同步高亮 */
+.synced-highlight {
+    background: rgba(129,140,248,0.18) !important;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+[data-theme="light"] .synced-highlight {
+    background: rgba(99,102,241,0.12) !important;
+}

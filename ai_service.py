@@ -110,37 +110,63 @@ When writing notes, follow these rules:
 Output ONLY the article content — no explanations, no "here is the article", just the Markdown."""
 
 
-async def _call_deepseek(messages: list[dict], max_tokens: int = 4096, timeout: int = 120,
-                        scenario: str = "") -> dict:
-    """统一封装 DeepSeek API 调用"""
+async def _call_deepseek(messages: list[dict], max_tokens: int = 0, timeout: int = 120,
+                        scenario: str = "", continue_on_truncation: bool = False) -> dict:
+    """统一封装 DeepSeek API 调用。
+
+    - max_tokens=0 表示不设置限制，由模型自行决定
+    - continue_on_truncation=True 时，若 finish_reason="length"，自动续写直到完整
+    """
     api_key = get_api_key()
     if not api_key:
         return {"error": "请先配置 API Key"}
 
     model = get_model_for(scenario) if scenario else get_model()
+    current_messages = [m.copy() for m in messages]
 
     try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                BASE_URL,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                },
-            )
-            data = resp.json()
+        full_text = ""
+        max_iterations = 10  # 安全上限，防止无限循环
 
-        if resp.status_code != 200:
-            error_msg = data.get("error", {}).get("message", "未知错误")
-            return {"error": f"API 错误 ({resp.status_code}): {error_msg}"}
+        for iteration in range(max_iterations):
+            body = {
+                "model": model,
+                "messages": current_messages,
+            }
+            if max_tokens > 0:
+                body["max_tokens"] = max_tokens
 
-        return {"text": data["choices"][0]["message"]["content"]}
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    BASE_URL,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=body,
+                )
+                data = resp.json()
+
+            if resp.status_code != 200:
+                error_msg = data.get("error", {}).get("message", "未知错误")
+                return {"error": f"API 错误 ({resp.status_code}): {error_msg}"}
+
+            choice = data["choices"][0]
+            chunk = choice["message"]["content"]
+            finish_reason = choice.get("finish_reason", "stop")
+            full_text += chunk
+
+            if not continue_on_truncation or finish_reason != "length":
+                return {"text": full_text}
+
+            # 被截断：让模型继续
+            current_messages.append({"role": "assistant", "content": chunk})
+            current_messages.append({"role": "user", "content": "请继续完成上面的内容，从截断处接着写，不要重复已写的内容。"})
+
+        return {"text": full_text, "warning": "达到最大续写次数，内容可能仍不完整"}
     except Exception as e:
+        if full_text:
+            return {"text": full_text, "warning": f"续写中断: {str(e)}"}
         return {"error": f"请求失败: {str(e)}"}
 
 
@@ -166,9 +192,10 @@ async def generate_article(topic: str, lang: str = "zh") -> dict:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ],
-        max_tokens=4096,
-        timeout=120,
+        max_tokens=0,
+        timeout=300,
         scenario="generate",
+        continue_on_truncation=True,
     )
 
     if "error" in result:
@@ -270,9 +297,10 @@ async def polish_content(content: str, lang: str = "zh") -> str:
                 f"Output the polished Markdown directly, nothing else.\n\n{content[:8000]}"
             ),
         }],
-        max_tokens=4096,
-        timeout=90,
+        max_tokens=0,
+        timeout=180,
         scenario="polish",
+        continue_on_truncation=True,
     )
     if "error" in result:
         return ""
@@ -327,7 +355,7 @@ async def analyze_category_gaps(category_name: str, articles: list[dict], lang: 
     result = await _call_deepseek(
         messages=[{"role": "user", "content": prompt}],
         max_tokens=4096,
-        timeout=120,
+        timeout=180,
         scenario="analyze",
     )
 
@@ -371,8 +399,8 @@ async def generate_knowledge_plan(category_name: str, articles: list[dict],
 
     result = await _call_deepseek(
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=4096,
-        timeout=120,
+        max_tokens=0,
+        timeout=180,
         scenario="plan",
     )
 
@@ -420,9 +448,10 @@ async def organize_notes(notes: list[dict], instruction: str = "", lang: str = "
 
     result = await _call_deepseek(
         messages=[{"role": "user", "content": prompt}],
-        max_tokens=8192,
-        timeout=180,
+        max_tokens=0,
+        timeout=300,
         scenario="organize",
+        continue_on_truncation=True,
     )
 
     if "error" in result:

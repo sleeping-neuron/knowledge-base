@@ -5,9 +5,10 @@ from typing import Optional
 
 import markdown as md
 from fastapi import FastAPI, Depends, HTTPException, Request, UploadFile, Form
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 from pygments.formatters import HtmlFormatter
 from sqlalchemy import desc
 from sqlalchemy.orm import Session, joinedload
@@ -26,6 +27,19 @@ UPLOADS_DIR = BASE_DIR / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
 app = FastAPI(title="知识库管理系统", version="1.0.0")
+
+
+@app.middleware("http")
+async def no_cache_middleware(request: Request, call_next):
+    resp = await call_next(request)
+    # 禁止缓存 HTML 页面，确保每次拿最新代码
+    ct = resp.headers.get("content-type", "")
+    if "text/html" in ct:
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
+    return resp
+
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
@@ -51,9 +65,13 @@ def render_markdown(content: str) -> str:
         math_blocks.append(m.group(0))
         return f"\x00MATH{len(math_blocks) - 1}\x00"
 
-    # 先保护 $$...$$ 块级公式（允许跨行、包含 $ 符号）
+    # 保护 \[...\] 块级公式（允许跨行）
+    content = re.sub(r'\\\[(.+?)\\\]', save_math, content, flags=re.DOTALL)
+    # 保护 $$...$$ 块级公式（允许跨行、包含 $ 符号）
     content = re.sub(r'\$\$(.+?)\$\$', save_math, content, flags=re.DOTALL)
-    # 再保护 $...$ 行内公式
+    # 保护 \(...\) 行内公式
+    content = re.sub(r'\\\((.+?)\\\)', save_math, content)
+    # 保护 $...$ 行内公式
     content = re.sub(r'\$([^$\n]+?)\$', save_math, content)
 
     body = md_processor.reset().convert(content)

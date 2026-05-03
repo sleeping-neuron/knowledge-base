@@ -102,15 +102,16 @@
     </div>
 
     <!-- 双栏编辑区 -->
-    <div class="flex-1 flex overflow-hidden">
-        <div class="w-1/2 border-r relative" style="border-color: var(--border)">
+    <div class="flex-1 flex overflow-hidden" style="min-height:0">
+        <div class="w-1/2 border-r flex flex-col" style="border-color:var(--border);min-height:0">
             <textarea x-model="content" @keydown.tab.prevent="onTab($el)"
-                      class="w-full h-full resize-none p-8 font-mono text-sm outline-none leading-relaxed
+                      class="w-full flex-1 block resize-none p-8 font-mono text-sm outline-none leading-relaxed
                              theme-text placeholder:text-[var(--muted)]"
-                      style="background: var(--bg);"
+                      style="background:var(--bg)"
                       :placeholder="t('mdPlaceholder') + '\n\n## ' + t('tabIndent') + '\n- ' + t('livePreview') + '\n- ' + t('mdHint')"></textarea>
         </div>
-        <div class="w-1/2 overflow-y-auto p-8" style="background: var(--bg); opacity: 0.8" x-html="preview"></div>
+        <div class="w-1/2 overflow-y-auto p-8" style="background:var(--bg);min-height:0"
+             x-html="preview"></div>
     </div>
 </div>
 
@@ -186,6 +187,20 @@ function editor() {
                 });
                 const data = await resp.json();
                 this.preview = data.html;
+                this.$nextTick(() => {
+                    const pane = this.$refs.previewPane;
+                    if (pane && typeof renderMathInElement !== 'undefined') {
+                        renderMathInElement(pane, {
+                            delimiters: [
+                                {left: '$$', right: '$$', display: true},
+                                {left: '$', right: '$', display: false},
+                                {left: '\\[', right: '\\]', display: true},
+                                {left: '\\(', right: '\\)', display: false},
+                            ],
+                            throwOnError: false,
+                        });
+                    }
+                });
             } catch { this.preview = ''; }
         },
 
